@@ -40,10 +40,14 @@ OBJECTS		= $(DRM_OBJS:%=$(OBJS_DIR)/%)
 LINTS		= $(DRM_OBJS:%.o=$(LINTS_DIR)/%.ln)
 ROOTMODULE	= $(ROOT_MISC_DIR)/$(MODULE)
 
-CMN_DRM		= $(UTSBASE)/common/drm
+CMN_DRM		= $(UTSBASE)/common/io/drm
 
-# Includes
-INC_PATH	+= -I$(CMN_DRM)
+# Include paths: illumos compat headers + system includes
+INC_PATH	+= -I$(CMN_DRM)/include
+INC_PATH	+= -I$(CMN_DRM)/include/linux
+INC_PATH	+= -I$(CMN_DRM)/include/drm
+INC_PATH	+= -I$(CMN_DRM)/include/uapi
+INC_PATH	+= -I$(CMN_DRM)/include/uapi/drm
 
 # Dependency
 LDFLAGS		+= -dy -Nmisc/agpmaster -Nmisc/gfx_private
@@ -54,10 +58,15 @@ LDFLAGS		+= -dy -Nmisc/agpmaster -Nmisc/gfx_private
 include $(UTSBASE)/intel/Makefile.intel
 include $(UTSBASE)/common/io/drm/Makefile.mod
 
+# Suppress common upstream warnings
 CERRWARN	+= -_gcc=-Wno-parentheses
 CERRWARN	+= -_gcc=-Wno-unused-function
 CERRWARN	+= -_gcc=-Wno-unused-variable
 CERRWARN	+= -_gcc=-Wno-unused-but-set-variable
+CERRWARN	+= -_gcc=-Wno-missing-field-initializers
+CERRWARN	+= -_gcc=-Wno-sign-compare
+CERRWARN	+= -_gcc=-Wno-implicit-fallthrough
+CERRWARN	+= -_gcc=-Wno-address-of-packed-member
 
 #
 #	Define targets
@@ -87,11 +96,44 @@ clean.lint:	$(CLEAN_LINT_DEPS)
 
 install:	$(INSTALL_DEPS)
 
-$(OBJS_DIR)/%.o:		$(UTSBASE)/common/io/drm/%.c
+#
+# Compile rules for top-level DRM sources
+#
+$(OBJS_DIR)/%.o:		$(CMN_DRM)/%.c
 	$(COMPILE.c) -o $@ $<
 	$(CTFCONVERT_O)
 
-$(LINTS_DIR)/%.ln:		$(UTSBASE)/common/io/drm/%.c
+$(LINTS_DIR)/%.ln:		$(CMN_DRM)/%.c
+	@($(LHEAD) $(LINT.c) $< $(LTAIL))
+
+#
+# Compile rules for display/ subdirectory (objects prefixed with display_)
+#
+$(OBJS_DIR)/display_%.o:	$(CMN_DRM)/display/%.c
+	$(COMPILE.c) -o $@ $<
+	$(CTFCONVERT_O)
+
+$(LINTS_DIR)/display_%.ln:	$(CMN_DRM)/display/%.c
+	@($(LHEAD) $(LINT.c) $< $(LTAIL))
+
+#
+# Compile rules for ttm/ subdirectory (objects prefixed with ttm_)
+#
+$(OBJS_DIR)/ttm_%.o:		$(CMN_DRM)/ttm/%.c
+	$(COMPILE.c) -o $@ $<
+	$(CTFCONVERT_O)
+
+$(LINTS_DIR)/ttm_%.ln:		$(CMN_DRM)/ttm/%.c
+	@($(LHEAD) $(LINT.c) $< $(LTAIL))
+
+#
+# Compile rules for scheduler/ subdirectory (objects prefixed with sched_)
+#
+$(OBJS_DIR)/sched_%.o:		$(CMN_DRM)/scheduler/%.c
+	$(COMPILE.c) -o $@ $<
+	$(CTFCONVERT_O)
+
+$(LINTS_DIR)/sched_%.ln:	$(CMN_DRM)/scheduler/%.c
 	@($(LHEAD) $(LINT.c) $< $(LTAIL))
 
 #
