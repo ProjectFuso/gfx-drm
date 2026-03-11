@@ -20,7 +20,29 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
-#include <lib/libkern/libkern.h>
+
+/*
+ * illumos: lib/libkern/libkern.h is OpenBSD-specific.
+ * Provide flsl/flsll via GCC builtins (available in kernel context).
+ * flsl(x): index of highest set bit in (long)x, 1-based; 0 if x==0.
+ * flsll(x): same for (long long)x.
+ */
+static inline int
+flsl(long mask)
+{
+	if (mask == 0)
+		return (0);
+	return (int)(sizeof(long) * 8) - __builtin_clzl((unsigned long)mask);
+}
+
+static inline int
+flsll(long long mask)
+{
+	if (mask == 0)
+		return (0);
+	return (int)(sizeof(long long) * 8) -
+	    __builtin_clzll((unsigned long long)mask);
+}
 
 #include <asm/bitsperlong.h>
 #include <linux/atomic.h>
