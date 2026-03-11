@@ -3,7 +3,7 @@
 #ifndef _LINUX_KCONFIG_H
 #define _LINUX_KCONFIG_H
 
-#include <sys/endian.h>
+#include <sys/isa_defs.h>	/* _BIG_ENDIAN / _LITTLE_ENDIAN */
 
 #include <generated/autoconf.h>
 
@@ -18,7 +18,11 @@
 #define IS_BUILTIN(x)		__is_defined(x)
 #define IS_MODULE(x)		0
 
-#if BYTE_ORDER == BIG_ENDIAN
+/*
+ * illumos: endianness — use sys/isa_defs.h macros (_BIG_ENDIAN/_LITTLE_ENDIAN).
+ * Define the Linux-style __BIG_ENDIAN / __LITTLE_ENDIAN so DRM code compiles.
+ */
+#ifdef _BIG_ENDIAN
 #define __BIG_ENDIAN
 #else
 #define __LITTLE_ENDIAN
