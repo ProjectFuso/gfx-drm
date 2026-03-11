@@ -5,7 +5,7 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/stdarg.h>
+#include <stdarg.h>		/* va_list, va_start, va_end — illumos: not sys/stdarg.h */
 
 #include <linux/types.h>
 #include <linux/slab.h>		/* kmalloc / kfree */
@@ -98,11 +98,13 @@ vscnprintf(char *buf, size_t size, const char *fmt, va_list ap)
 		return nc;
 }
 
-#define might_sleep()		assertwaitok()
-#define might_sleep_if(x)	do {	\
-	if (x)				\
-		assertwaitok();		\
-} while (0)
+/*
+ * might_sleep: Linux annotation that a function may sleep.
+ * On illumos this is a no-op for Phase 1; callers rely on the kernel's
+ * own sleep-context checks (ASSERT in cv_wait etc.).
+ */
+#define might_sleep()		do { } while (0)
+#define might_sleep_if(x)	do { } while (0)
 #define might_fault()
 
 #define add_taint(x, y)

@@ -131,12 +131,18 @@ static inline void list_move(struct list_head *list, struct list_head *head)
 	list_add(list, head);
 }
 
-static inline void list_move_tail(struct list_head *list,
-    struct list_head *head)
+/*
+ * list_move_tail: defined as a macro to avoid name conflict with illumos
+ * sys/list.h which declares void list_move_tail(list_t *, list_t *).
+ * Both are pulled into the same translation unit via sys/rwlock.h.
+ */
+static inline void
+__linux_list_move_tail(struct list_head *list, struct list_head *head)
 {
 	list_del(list);
 	list_add_tail(list, head);
 }
+#define list_move_tail(list, head)	__linux_list_move_tail(list, head)
 
 static inline void
 list_rotate_to_front(struct list_head *list, struct list_head *head)
