@@ -4,6 +4,7 @@
 #define _LINUX_FIRMWARE_H
 
 #include <sys/types.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 #include <linux/types.h>
 #include <linux/gfp.h>

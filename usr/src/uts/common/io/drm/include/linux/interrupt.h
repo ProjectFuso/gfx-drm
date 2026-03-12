@@ -18,7 +18,16 @@ struct seq_file;
 #define IRQF_TRIGGER_RISING	0x1000
 #define IRQF_TRIGGER_FALLING	0x2000
 
+typedef irqreturn_t (*irq_handler_t)(int, void *);
+
 #define request_irq(irq, hdlr, flags, name, dev)	(0)
+
+static inline int
+request_threaded_irq(unsigned int irq, irq_handler_t handler,
+    irq_handler_t thread_fn, unsigned long flags, const char *name, void *dev)
+{
+	return 0;
+}
 
 static inline void
 free_irq(unsigned int irq, void *dev)
@@ -34,8 +43,6 @@ static inline void
 enable_irq(u_int irq)
 {
 }
-
-typedef irqreturn_t (*irq_handler_t)(int, void *);
 
 static inline int
 devm_request_threaded_irq(struct device *dev, u_int irq, irq_handler_t handler,

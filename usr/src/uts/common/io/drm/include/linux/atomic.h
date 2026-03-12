@@ -243,6 +243,19 @@ typedef int32_t atomic_long_t;
 #define atomic_long_sub(i, v)		atomic_sub(i, v)
 #endif
 
+static inline long
+atomic_long_inc_not_zero(atomic_long_t *v)
+{
+	long old, new;
+	do {
+		old = atomic_long_read(v);
+		if (old == 0)
+			return (0);
+		new = old + 1;
+	} while (__sync_val_compare_and_swap(v, old, new) != old);
+	return (new);
+}
+
 static inline atomic_t
 test_and_set_bit(u_int b, volatile void *p)
 {

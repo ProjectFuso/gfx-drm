@@ -23,6 +23,8 @@
 #include <linux/dma-resv.h>
 #include <linux/list.h>
 #include <linux/file.h>
+#include <linux/dma-direction.h>
+#include <linux/scatterlist.h>
 
 struct dma_buf_ops;
 struct device;
@@ -52,6 +54,12 @@ void	dma_buf_put(struct dma_buf *);
 int	dma_buf_fd(struct dma_buf *, int);
 
 struct dma_buf_ops {
+	int (*attach)(struct dma_buf *, struct dma_buf_attachment *);
+	void (*detach)(struct dma_buf *, struct dma_buf_attachment *);
+	struct sg_table *(*map_dma_buf)(struct dma_buf_attachment *,
+	    enum dma_data_direction);
+	void (*unmap_dma_buf)(struct dma_buf_attachment *, struct sg_table *,
+	    enum dma_data_direction);
 	void (*release)(struct dma_buf *);
 };
 
@@ -84,4 +92,27 @@ dma_buf_is_dynamic(struct dma_buf *buf)
 {
 	return false;
 }
+
+#include <linux/iosys-map.h>
+
+static inline int
+dma_buf_vmap(struct dma_buf *buf, struct iosys_map *map)
+{
+	return -ENOSYS;
+}
+
+static inline void
+dma_buf_vunmap(struct dma_buf *buf, struct iosys_map *map)
+{
+}
+
+#include <linux/mm_types.h>
+
+static inline int
+dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma,
+	     unsigned long pgoff)
+{
+	return -ENOSYS;
+}
+
 #endif

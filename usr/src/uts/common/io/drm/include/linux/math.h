@@ -8,7 +8,8 @@
 #define round_up(x, y) ((((x) + ((y) - 1)) / (y)) * (y))
 #define round_down(x, y) (((x) / (y)) * (y)) /* y is power of two */
 #define rounddown(x, y) (((x) / (y)) * (y)) /* arbitrary y */
-#define DIV_ROUND_UP(x, y)	(((x) + ((y) - 1)) / (y))
+#define __KERNEL_DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
+#define DIV_ROUND_UP(x, y)	__KERNEL_DIV_ROUND_UP(x, y)
 #define DIV_ROUND_UP_ULL(x, y)	DIV_ROUND_UP(x, y)
 #define DIV_ROUND_DOWN(x, y)	((x) / (y))
 #define DIV_ROUND_DOWN_ULL(x, y)	DIV_ROUND_DOWN(x, y)

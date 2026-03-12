@@ -1,0 +1,5 @@
+#ifndef _LINUX_OBJTOOL_H_
+#define _LINUX_OBJTOOL_H_
+#define STACK_FRAME_NON_STANDARD(func)
+#define ANNOTATE_INTRA_FUNCTION_CALL
+#endif

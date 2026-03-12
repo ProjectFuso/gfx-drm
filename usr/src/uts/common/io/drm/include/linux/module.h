@@ -15,8 +15,10 @@ struct module;
 #define MODULE_FIRMWARE(x)
 #define MODULE_DEVICE_TABLE(x, y)
 #define MODULE_IMPORT_NS(x)
+#define MODULE_VERSION(x)
 #define module_init(x)
 #define module_exit(x)
+#define module_driver(drv, reg, unreg, ...) /* no-op on illumos */
 #define symbol_put(x)
 
 static inline bool

@@ -4,6 +4,7 @@
 #define _LINUX_DELAY_H
 
 #include <sys/ddi.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 #include <sys/mutex.h>
 #include <sys/condvar.h>

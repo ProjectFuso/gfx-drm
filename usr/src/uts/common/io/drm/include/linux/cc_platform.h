@@ -6,6 +6,7 @@
 #include <linux/types.h>
 
 #define CC_ATTR_GUEST_MEM_ENCRYPT	0
+#define CC_ATTR_MEM_ENCRYPT		CC_ATTR_GUEST_MEM_ENCRYPT
 
 static inline bool
 cc_platform_has(int x)

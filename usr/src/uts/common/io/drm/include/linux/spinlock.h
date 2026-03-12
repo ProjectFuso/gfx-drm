@@ -64,6 +64,9 @@ atomic_dec_and_lock(volatile int *v, struct mutex *mtxp)
 #define spin_unlock(mtxp)		mutex_exit(mtxp)
 #define spin_lock_irq(mtxp)		mutex_enter(mtxp)
 #define spin_unlock_irq(mtxp)		mutex_exit(mtxp)
+/* BH (bottom-half) lock variants: illumos has no softirq BH; map to plain lock */
+#define spin_lock_bh(mtxp)		mutex_enter(mtxp)
+#define spin_unlock_bh(mtxp)		mutex_exit(mtxp)
 #define assert_spin_locked(mtxp)	ASSERT(MUTEX_HELD(mtxp))
 #define spin_trylock_irq(mtxp)		mutex_tryenter(mtxp)
 

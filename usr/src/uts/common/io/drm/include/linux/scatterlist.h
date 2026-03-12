@@ -46,6 +46,10 @@ struct sg_page_iter {
 	unsigned int	__nents;
 };
 
+struct sg_dma_page_iter {
+	struct sg_page_iter base;
+};
+
 #define sg_is_chain(sg)		false
 #define sg_is_last(sg)		((sg)->end)
 #define sg_chain_ptr(sg)	NULL
@@ -58,6 +62,11 @@ sg_next(struct scatterlist *sgl)
 
 int sg_alloc_table(struct sg_table *, unsigned int, gfp_t);
 void sg_free_table(struct sg_table *);
+/* sg_alloc_table_from_pages_segment: stub, implemented in drm compat layer */
+int sg_alloc_table_from_pages_segment(struct sg_table *sgt,
+    struct page **pages, unsigned int n_pages,
+    unsigned long offset, unsigned long size,
+    unsigned int max_segment, gfp_t gfp_mask);
 
 static inline void
 sg_mark_end(struct scatterlist *sgl)
@@ -88,9 +97,16 @@ __sg_page_iter_next(struct sg_page_iter *iter)
 	return (iter->__nents > 0);
 }
 
-static inline dma_addr_t
-sg_page_iter_dma_address(struct sg_page_iter *iter)
+static inline bool
+__sg_page_iter_dma_next(struct sg_dma_page_iter *diter)
 {
+	return __sg_page_iter_next(&diter->base);
+}
+
+static inline dma_addr_t
+sg_page_iter_dma_address(struct sg_dma_page_iter *diter)
+{
+	struct sg_page_iter *iter = &diter->base;
 	return iter->sg->dma_address + (iter->sg_pgoffset << PAGE_SHIFT);
 }
 

@@ -37,4 +37,12 @@ ktime_get_boottime_ns(void)
 	return ktime_get_ns();
 }
 
+static inline void
+ktime_get_ts64(struct timespec64 *ts)
+{
+	ktime_t k = ktime_get();
+	ts->tv_sec  = k / NSEC_PER_SEC;
+	ts->tv_nsec = k % NSEC_PER_SEC;
+}
+
 #endif

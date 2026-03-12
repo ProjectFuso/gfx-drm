@@ -26,4 +26,16 @@ rounddown_pow_of_two(unsigned long x)
 	return (1UL << (flsl(x) - 1));
 }
 
+/*
+ * get_count_order(x) — smallest n such that 2^n >= x.
+ * Equivalent to order_base_2 but for a count (not a size).
+ */
+static inline int
+get_count_order(unsigned int x)
+{
+	if (x == 0)
+		return -1;
+	return (int)(sizeof(unsigned int) * 8 - __builtin_clz(x - 1));
+}
+
 #endif

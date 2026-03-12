@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/systm.h>
 #include <sys/ddi.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 #include <sys/varargs.h>
 #include <sys/bus.h>		/* bus_space_tag_t / bus_dma_tag_t illumos stubs */
@@ -29,10 +30,13 @@ struct device {
 	dev_info_t		*dip;		/* illumos DDI device info node */
 	struct device_node	*of_node;	/* device tree node (NULL on x86) */
 	const char		*init_name;	/* device name string */
+	struct pci_dev		*pdev;		/* back-pointer to PCI device */
 };
 
 struct device_driver {
-	struct device *dev;
+	const char		*name;
+	struct device		*dev;
+	const struct dev_pm_ops	*pm;
 };
 
 struct device_attribute {

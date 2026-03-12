@@ -12,14 +12,15 @@
  */
 
 /*
- * illumos: PAGE_SIZE/PAGE_SHIFT are PAGESIZE/PAGESHIFT; PAGE_MASK derived.
- * sys/param.h (included above) defines PAGESIZE and PAGESHIFT.
+ * illumos: On x86-64, page size is always 4096. Use compile-time constants
+ * so that array sizes depending on PAGE_SIZE/PAGE_SHIFT are valid.
+ * (PAGESIZE in illumos is a runtime variable, not a compile-time constant.)
  */
 #ifndef PAGE_SIZE
-#define PAGE_SIZE	PAGESIZE
+#define PAGE_SIZE	4096UL
 #endif
 #ifndef PAGE_SHIFT
-#define PAGE_SHIFT	PAGESHIFT
+#define PAGE_SHIFT	12
 #endif
 #ifndef PAGE_MASK
 #define PAGE_MASK	(~(PAGE_SIZE - 1UL))
@@ -39,7 +40,7 @@
 #define page_to_phys(page)	((uint64_t)0)
 #define page_to_pfn(pp)		((uint64_t)0)
 #define pfn_to_page(pfn)	((struct page *)NULL)
-#define nth_page(page, n)	(&(page)[(n)])
+#define nth_page(page, n)	((page) + (n))
 #define offset_in_page(off)	((uintptr_t)(off) & PAGE_MASK)
 #define set_page_dirty(page)	do { (void)(page); } while (0)
 
@@ -48,6 +49,7 @@
 #define PFN_UP(x)		(((x) + PAGE_SIZE-1) >> PAGE_SHIFT)
 #define PFN_DOWN(x)		((x) >> PAGE_SHIFT)
 #define PFN_PHYS(x)		((x) << PAGE_SHIFT)
+#define PFN_ALIGN(x)		(((unsigned long)(x) + (PAGE_SIZE - 1)) & PAGE_MASK)
 
 /*
  * illumos: OpenBSD uses 'struct vm_page' where Linux uses 'struct page'.
@@ -57,7 +59,49 @@
 #define vm_page page
 #endif
 
+/* vm_fault_t, VM_FAULT_* and struct vm_fault are in linux/mm_types.h */
+#include <linux/mm_types.h>
+
 bool is_vmalloc_addr(const void *);
+
+/*
+ * page_address — return kernel virtual address of a page.
+ * Phase 1: pages are backed by kmem; return the stored kaddr.
+ */
+static inline void *
+page_address(struct page *page)
+{
+	return page ? page->kaddr : NULL;
+}
+
+/* Page pinning flags */
+#define FOLL_LONGTERM	(1 << 4)
+#define FOLL_WRITE	(1 << 1)
+
+/*
+ * pin_user_pages_fast — pin user pages into memory.
+ * Phase 1 stub: returns -ENOSYS.
+ */
+static inline long
+pin_user_pages_fast(unsigned long start, long nr_pages, unsigned int gup_flags,
+    struct page **pages)
+{
+	return -ENOSYS;
+}
+
+/*
+ * unpin_user_page / unpin_user_pages — release pinned user pages.
+ * Phase 1 stubs: no-op.
+ */
+static inline void
+unpin_user_page(struct page *page)
+{
+}
+
+static inline void
+unpin_user_pages(struct page **pages, long nr_pages)
+{
+}
 
 /* kvmalloc/kvfree/kvcalloc/kvzalloc are provided by linux/slab.h */
 

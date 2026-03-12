@@ -6,7 +6,8 @@
 typedef int irqreturn_t;
 enum irqreturn {
 	IRQ_NONE = 0,
-	IRQ_HANDLED = 1
+	IRQ_HANDLED = 1,
+	IRQ_WAKE_THREAD = 2
 };
 
 #endif

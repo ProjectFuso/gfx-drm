@@ -34,8 +34,25 @@ gfpflags_allow_blocking(const unsigned int flags)
 	return (flags & KM_NOSLEEP) == 0;
 }
 
-/* page allocation stubs - full impl deferred to Phase 2 */
-struct page;
+/*
+ * struct page — illumos Phase 1 Linux page descriptor.
+ * Backed by kmem-allocated kernel virtual memory.
+ * 'lru' is used by callers to chain pages on lists (e.g. validation ctx).
+ * 'kaddr' is the kernel virtual address of the page data.
+ *
+ * We also typedef this as page_t so that illumos system headers that
+ * declare page_t * pointers (ddidevmap.h, etc.) can compile.
+ * Those pointers are never dereferenced in ways that depend on illumos
+ * page_t internals within the DRM/vmwgfx tree.
+ */
+#include <linux/list.h>
+struct page {
+	struct list_head lru;
+	void		*kaddr;
+	unsigned long	index;
+	unsigned int	_refcount;
+};
+typedef struct page page_t;
 struct page *alloc_pages(unsigned int gfp_mask, unsigned int order);
 void __free_pages(struct page *page, unsigned int order);
 

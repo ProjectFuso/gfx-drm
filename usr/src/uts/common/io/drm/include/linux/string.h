@@ -136,4 +136,21 @@ strscpy_pad(char *dst, const char *src, size_t dstsize)
 	return strscpy(dst, src, dstsize);
 }
 
+/* kstrtobool: parse "y", "1", "t" as true; "n", "0", "f" as false */
+static inline int
+kstrtobool(const char *s, bool *res)
+{
+	if (!s || !s[0])
+		return -EINVAL;
+	switch (s[0]) {
+	case 'y': case 'Y': case '1': case 't': case 'T':
+		*res = true;
+		return 0;
+	case 'n': case 'N': case '0': case 'f': case 'F':
+		*res = false;
+		return 0;
+	}
+	return -EINVAL;
+}
+
 #endif

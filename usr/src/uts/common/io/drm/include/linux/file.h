@@ -3,14 +3,13 @@
 #ifndef _LINUX_FILE_H
 #define _LINUX_FILE_H
 
-/* both for printf */
-#include <sys/types.h> 
-#include <sys/systm.h>
+/*
+ * linux/file.h — illumos stub.
+ * fd_install, fput, get_unused_fd_flags, put_unused_fd are inline stubs
+ * in linux/fs.h. We include that rather than pulling in sys/systm.h
+ * which would drag in sys/file.h (illumos struct file) and conflict
+ * with our Linux-compat struct file definition.
+ */
+#include <linux/fs.h>
 
-void fd_install(int, struct file *);
-void fput(struct file *);
-
-int get_unused_fd_flags(unsigned int);
-void put_unused_fd(int);
-
-#endif
+#endif /* _LINUX_FILE_H */

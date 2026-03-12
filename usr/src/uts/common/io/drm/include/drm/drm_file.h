@@ -510,4 +510,13 @@ void drm_show_fdinfo(struct seq_file *m, struct file *f);
 
 struct file *mock_drm_getfile(struct drm_minor *minor, unsigned int flags);
 
+/* DRM VFS file operation callbacks */
+struct poll_table_struct;
+struct vm_area_struct;
+int drm_open(struct inode *inode, struct file *filp);
+int drm_release(struct inode *inode, struct file *filp);
+ssize_t drm_read(struct file *filp, char *buffer, size_t count, loff_t *offset);
+unsigned int drm_poll(struct file *filp, struct poll_table_struct *wait);
+int drm_gem_mmap(struct file *filp, struct vm_area_struct *vma);
+
 #endif /* _DRM_FILE_H_ */

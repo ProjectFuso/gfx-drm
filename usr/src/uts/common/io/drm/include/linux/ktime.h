@@ -18,6 +18,11 @@
 #ifndef _LINUX_KTIME_H
 #define _LINUX_KTIME_H
 
+/* Block sys/file.h before any system header can pull it in */
+#ifndef _SYS_FILE_H
+#define _SYS_FILE_H
+#endif
+
 #include <sys/time.h>
 #include <linux/time.h>
 #include <linux/jiffies.h>

@@ -9,6 +9,16 @@
 #ifndef _LINUX_WORKQUEUE_H
 #define _LINUX_WORKQUEUE_H
 
+/*
+ * Predefine _SYS_FILE_H before including sys/taskq_impl.h.
+ * sys/taskq_impl.h transitively includes sys/file.h (illumos struct file),
+ * which conflicts with our Linux-compat struct file in linux/fs.h.
+ * Neither workqueue.h nor taskq_impl.h use file_t/struct file themselves.
+ */
+#ifndef _SYS_FILE_H
+#define _SYS_FILE_H
+#endif
+
 #include <sys/taskq.h>
 #include <sys/taskq_impl.h>
 

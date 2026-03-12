@@ -16,6 +16,7 @@
 #include <sys/thread.h>
 #include <sys/user.h>
 #include <sys/ddi.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 #include <linux/hrtimer.h>
 #include <linux/sem.h>
@@ -61,6 +62,16 @@ static inline pid_t
 task_pid_nr(struct task_struct *t)
 {
 	return t->pid;
+}
+
+/*
+ * task_pgrp_vnr — return the process group ID of the given task.
+ * On illumos, we use curproc->p_pgidp->pid_id.
+ */
+static inline pid_t
+task_pgrp_vnr(struct task_struct *t)
+{
+	return (pid_t)curproc->p_pgidp->pid_id;
 }
 
 /*

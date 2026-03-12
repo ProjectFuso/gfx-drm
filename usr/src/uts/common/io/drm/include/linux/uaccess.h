@@ -72,6 +72,19 @@ copy_from_user(void *to, const void *from, unsigned long len)
 })
 
 /*
+ * strncpy_from_user — copy NUL-terminated string from user space.
+ * Returns number of bytes copied (not including NUL), or negative on error.
+ */
+static inline long
+strncpy_from_user(char *dst, const char __user *src, long count)
+{
+	long len;
+	if (copyinstr(src, dst, count, (size_t *)&len) != 0)
+		return -EFAULT;
+	return (long)(len - 1);	/* exclude NUL terminator */
+}
+
+/*
  * illumos: access_ok() stub — always returns 1.
  * Proper user-address range checking deferred to Phase 2.
  */

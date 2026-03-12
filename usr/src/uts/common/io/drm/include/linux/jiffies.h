@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <sys/limits.h>
 #include <sys/ddi.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 
 /*

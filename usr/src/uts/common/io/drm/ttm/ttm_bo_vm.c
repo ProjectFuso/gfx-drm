@@ -354,7 +354,6 @@ EXPORT_SYMBOL(ttm_bo_vm_fault);
 int __ttm_bo_vm_illumos_stub;
 #endif /* !__linux__ */
 
-#ifdef __linux__
 /**
  * ttm_bo_mmap_obj - mmap memory backed by a ttm buffer object.
  *
@@ -365,10 +364,6 @@ int __ttm_bo_vm_illumos_stub;
  */
 int ttm_bo_mmap_obj(struct vm_area_struct *vma, struct ttm_buffer_object *bo)
 {
-	/* Enforce no COW since would have really strange behavior with it. */
-	if (is_cow_mapping(vma->vm_flags))
-		return -EINVAL;
-
 	ttm_bo_get(bo);
 
 	/*
@@ -378,19 +373,8 @@ int ttm_bo_mmap_obj(struct vm_area_struct *vma, struct ttm_buffer_object *bo)
 	if (!vma->vm_ops)
 		vma->vm_ops = &ttm_bo_vm_ops;
 
-	/*
-	 * Note: We're transferring the bo reference to
-	 * vma->vm_private_data here.
-	 */
-
 	vma->vm_private_data = bo;
-
-	vm_flags_set(vma, VM_PFNMAP | VM_IO | VM_DONTEXPAND | VM_DONTDUMP);
+	vma->vm_flags |= VM_PFNMAP | VM_IO | VM_DONTEXPAND | VM_DONTDUMP;
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_mmap_obj);
-#else /* __sun */
-/* illumos Phase 1 stubs */
-int ttm_bo_mmap_obj(struct ttm_buffer_object *bo) { ttm_bo_get(bo); return 0; }
-EXPORT_SYMBOL(ttm_bo_mmap_obj);
-#endif /* !__linux__ */

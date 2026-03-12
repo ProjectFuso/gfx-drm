@@ -4,6 +4,14 @@
 #define _LINUX_KERNEL_H
 
 #include <sys/param.h>
+/*
+ * Predefine _SYS_FILE_H before sys/systm.h pulls in sys/proc.h → sys/user.h,
+ * which forward-declares "struct file *uf_file" — conflicting with our Linux
+ * compat struct file in linux/fs.h. kernel.h itself does not use file_t.
+ */
+#ifndef _SYS_FILE_H
+#define _SYS_FILE_H
+#endif
 #include <sys/systm.h>
 #include <stdarg.h>		/* va_list, va_start, va_end — illumos: not sys/stdarg.h */
 

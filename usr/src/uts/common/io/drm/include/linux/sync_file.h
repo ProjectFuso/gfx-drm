@@ -3,6 +3,7 @@
 #ifndef _LINUX_SYNC_FILE_H
 #define _LINUX_SYNC_FILE_H
 
+#include <linux/fcntl.h>
 #include <linux/dma-fence.h>
 #include <linux/dma-fence-array.h>
 #include <linux/ktime.h>

@@ -5,12 +5,19 @@
 
 #include <linux/types.h>
 
-#define IORESOURCE_MEM	0x0001
+typedef uint64_t resource_size_t;
+typedef uint64_t phys_addr_t;
+
+#define IORESOURCE_IO		0x00000100
+#define IORESOURCE_MEM		0x00000200
+#define IORESOURCE_PREFETCH	0x00001000
+#define IORESOURCE_MEM_64	0x00100000
 
 struct resource {
-	u_long	start;
-	u_long	end;
-	const char *name;
+	resource_size_t	start;
+	resource_size_t	end;
+	unsigned long	flags;
+	const char	*name;
 };
 
 static inline resource_size_t
@@ -23,6 +30,7 @@ resource_size(const struct resource *r)
 (struct resource) {				\
 		.start = (_start),		\
 		.end = (_start) + (_size) - 1,	\
+		.flags = IORESOURCE_MEM,	\
 		.name = NULL,			\
 	}
 

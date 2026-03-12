@@ -20,6 +20,9 @@
 #ifndef _LINUX_PCI_H_
 #define _LINUX_PCI_H_
 
+/* Block vm/page.h before sys/sunddi.h can pull it in */
+#include <linux/illumos_page_compat.h>
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/ddi.h>
@@ -52,6 +55,7 @@ struct pci_dev;
 #define PCI_VENDOR_ID_INTEL	0x8086
 #define PCI_VENDOR_ID_SONY	0x104d
 #define PCI_VENDOR_ID_VIA	0x1106
+#define PCI_VENDOR_ID_VMWARE	0x15AD
 
 /* ATI Radeon QY product ID */
 #define PCI_DEVICE_ID_ATI_RADEON_QY	0x5159
@@ -157,6 +161,12 @@ struct pci_acpi {
 };
 
 /*
+ * illumos: struct resource and IORESOURCE_* are defined in linux/ioport.h,
+ * which is included above.
+ */
+#define PCI_NUM_RESOURCES	7
+
+/*
  * illumos struct pci_dev:
  * Uses ddi_acc_handle_t for PCI config access and dev_info_t for DDI ops.
  */
@@ -175,6 +185,9 @@ struct pci_dev {
 	ddi_acc_handle_t config_handle;	/* illumos DDI PCI config access */
 	dev_info_t	*dip;		/* illumos device info node */
 
+	/* PCI BARs — filled in by DDI glue code */
+	struct resource	resource[PCI_NUM_RESOURCES];
+
 	int		irq;
 	int		msi_enabled;
 	uint8_t		no_64bit_msi;
@@ -183,6 +196,16 @@ struct pci_dev {
 	struct pci_acpi	acpi_dev;	/* ACPI stub (renamed: dev is Linux device) */
 	struct device	dev;		/* embedded Linux-compat generic device */
 };
+
+/* BAR access macros — use resource[] array filled by DDI glue */
+#define pci_resource_start(pdev, bar)	((pdev)->resource[(bar)].start)
+#define pci_resource_end(pdev, bar)	((pdev)->resource[(bar)].end)
+#define pci_resource_len(pdev, bar) \
+	((pdev)->resource[(bar)].start == 0 ? 0 : \
+	 (pdev)->resource[(bar)].end - (pdev)->resource[(bar)].start + 1)
+#define pci_resource_flags(pdev, bar)	((pdev)->resource[(bar)].flags)
+
+#define to_pci_dev(_d)		container_of(_d, struct pci_dev, dev)
 
 #define PCI_ANY_ID (uint16_t) (~0U)
 
@@ -570,6 +593,20 @@ pci_free_irq_vectors(struct pci_dev *pdev)
 {
 }
 
+/* PCI IRQ vector allocation flags */
+#define PCI_IRQ_INTX		(1 << 0)
+#define PCI_IRQ_MSI		(1 << 1)
+#define PCI_IRQ_MSIX		(1 << 2)
+#define PCI_IRQ_ALL_TYPES	(PCI_IRQ_INTX | PCI_IRQ_MSI | PCI_IRQ_MSIX)
+
+static inline int
+pci_alloc_irq_vectors(struct pci_dev *pdev, unsigned int min_vecs,
+    unsigned int max_vecs, unsigned int flags)
+{
+	/* Phase 1 stub: single INTx vector */
+	return 1;
+}
+
 static inline int
 pci_set_power_state(struct pci_dev *dev, int state)
 {
@@ -621,6 +658,75 @@ static inline int
 dev_is_pci(struct device *dev)
 {
 	return 1;
+}
+
+struct pci_driver {
+	const char *name;
+	const struct pci_device_id *id_table;
+	int (*probe)(struct pci_dev *, const struct pci_device_id *);
+	void (*remove)(struct pci_dev *);
+	int (*resume)(struct pci_dev *);
+	int (*suspend)(struct pci_dev *);
+	struct device_driver driver;
+};
+
+static inline int pcim_enable_device(struct pci_dev *pdev) { return 0; }
+
+/*
+ * Region management stubs — illumos DDI handles resource allocation.
+ */
+static inline int
+pci_request_regions(struct pci_dev *pdev, const char *name)
+{
+	return 0;	/* illumos DDI manages resources */
+}
+
+static inline void
+pci_release_regions(struct pci_dev *pdev)
+{
+}
+
+static inline int
+pci_request_region(struct pci_dev *pdev, int bar, const char *name)
+{
+	return 0;
+}
+
+static inline void
+pci_release_region(struct pci_dev *pdev, int bar)
+{
+}
+
+/*
+ * devm_ioremap / devm_memremap — device-managed MMIO mapping.
+ * On illumos we use memremap from linux/io.h (which is a stub for now).
+ */
+#include <linux/io.h>
+
+static inline void *
+devm_ioremap(struct device *dev, resource_size_t offset, resource_size_t size)
+{
+	return memremap(offset, size, MEMREMAP_WB);
+}
+
+static inline void *
+devm_memremap(struct device *dev, resource_size_t offset, resource_size_t size,
+    unsigned long flags)
+{
+	return memremap(offset, size, flags);
+}
+
+static inline void *
+devm_ioremap_wc(struct device *dev, resource_size_t offset,
+    resource_size_t size)
+{
+	return memremap(offset, size, MEMREMAP_WB);
+}
+
+static inline void
+pci_iounmap(struct pci_dev *pdev, void __iomem *addr)
+{
+	memunmap(addr);
 }
 
 #endif /* _LINUX_PCI_H_ */

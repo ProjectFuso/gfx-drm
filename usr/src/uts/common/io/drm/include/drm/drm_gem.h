@@ -184,9 +184,7 @@ struct drm_gem_object_funcs {
 	 * drm_gem_prime_mmap().  When @mmap is present @vm_ops is not
 	 * used, the @mmap callback must set vma->vm_ops instead.
 	 */
-#ifdef __linux__
 	int (*mmap)(struct drm_gem_object *obj, struct vm_area_struct *vma);
-#endif
 
 	/**
 	 * @evict:
@@ -227,11 +225,7 @@ struct drm_gem_object_funcs {
 	 *
 	 * This is optional but necessary for mmap support.
 	 */
-#ifdef __linux__
 	const struct vm_operations_struct *vm_ops;
-#else
-	const struct uvm_pagerops *vm_ops;
-#endif
 };
 
 /**

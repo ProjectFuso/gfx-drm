@@ -25,6 +25,12 @@ dma_set_max_seg_size(struct device *dev, unsigned int sz)
 	return 0;
 }
 
+static inline unsigned int
+dma_get_max_seg_size(struct device *dev)
+{
+	return (~0U);
+}
+
 static inline int
 dma_set_mask(struct device *dev, uint64_t m)
 {
@@ -44,11 +50,11 @@ dma_addressing_limited(void *dev)
 }
 
 static inline dma_addr_t
-dma_map_page(void *dev, page_t *page, size_t offset,
+dma_map_page(void *dev, struct page *page, size_t offset,
     size_t size, enum dma_data_direction dir)
 {
-	/* Phase 1 stub: return physical page number shifted to address */
-	return (dma_addr_t)page_pptonum(page) << PAGESHIFT;
+	/* Phase 1 stub: DMA address unavailable (page backed by kmem) */
+	return DMA_MAPPING_ERROR;
 }
 
 static inline void

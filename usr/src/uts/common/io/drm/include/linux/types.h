@@ -3,6 +3,16 @@
 #ifndef _LINUX_TYPES_H
 #define _LINUX_TYPES_H
 
+/*
+ * Block illumos sys/file.h which defines "struct file" (file_t).
+ * This conflicts with our Linux-compat struct file in linux/fs.h.
+ * sys/file.h is pulled in transitively by many system headers
+ * (e.g. sys/cpuvar.h, sys/proc.h → sys/user.h).
+ */
+#ifndef _SYS_FILE_H
+#define _SYS_FILE_H
+#endif
+
 #include <sys/types.h>
 #include <sys/int_types.h>
 #include <stdbool.h>

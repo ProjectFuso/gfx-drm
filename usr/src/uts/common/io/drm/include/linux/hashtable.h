@@ -45,17 +45,23 @@ __hash_empty(struct hlist_head *table, u_int size)
 	return true;
 }
 
-#define __hash(table, key)	&table[key % (nitems(table) - 1)]
+#define __hash(table, key)	&table[key % (ARRAY_SIZE(table) - 1)]
 
-#define hash_init(table)	__hash_init(table, nitems(table))
+#define hash_init(table)	__hash_init(table, ARRAY_SIZE(table))
 #define hash_add(table, node, key) \
 	hlist_add_head(node, __hash(table, key))
 #define hash_del(node)		hlist_del_init(node)
-#define hash_empty(table)	__hash_empty(table, nitems(table))
+#define hash_empty(table)	__hash_empty(table, ARRAY_SIZE(table))
 #define hash_for_each_possible(table, obj, member, key) \
 	hlist_for_each_entry(obj, __hash(table, key), member)
 #define hash_for_each_safe(table, i, tmp, obj, member) 	\
-	for (i = 0; i < nitems(table); i++)		\
+	for (i = 0; i < ARRAY_SIZE(table); i++)		\
 	       hlist_for_each_entry_safe(obj, tmp, &table[i], member)
+
+/* RCU variants: Phase 1 — map directly to non-RCU equivalents */
+#define hash_add_rcu(table, node, key)	hash_add(table, node, key)
+#define hash_del_rcu(node)		hash_del(node)
+#define hash_for_each_possible_rcu(table, obj, member, key) \
+	hash_for_each_possible(table, obj, member, key)
 
 #endif

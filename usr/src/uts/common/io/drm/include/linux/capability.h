@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/systm.h>
 #include <sys/ddi.h>
+#include <linux/illumos_page_compat.h>
 #include <sys/sunddi.h>
 #include <sys/cred.h>
 

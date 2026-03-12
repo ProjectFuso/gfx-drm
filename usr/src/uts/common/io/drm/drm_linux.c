@@ -583,14 +583,39 @@ dmi_check_system(const struct dmi_system_id *sysid)
 struct page *
 alloc_pages(unsigned int gfp_mask, unsigned int order)
 {
-	/* Phase 1: not implemented */
-	return NULL;
+	int km_flags = (gfp_mask & KM_NOSLEEP) ? KM_NOSLEEP : KM_SLEEP;
+	size_t sz = PAGE_SIZE << order;
+	struct page *page;
+
+	page = kmem_zalloc(sizeof(struct page), km_flags);
+	if (page == NULL)
+		return NULL;
+
+	page->kaddr = (gfp_mask & __GFP_ZERO)
+	    ? kmem_zalloc(sz, km_flags)
+	    : kmem_alloc(sz, km_flags);
+
+	if (page->kaddr == NULL) {
+		kmem_free(page, sizeof(struct page));
+		return NULL;
+	}
+
+	INIT_LIST_HEAD(&page->lru);
+	page->_refcount = 1;
+	return page;
 }
 
 void
 __free_pages(struct page *page, unsigned int order)
 {
-	/* Phase 1: not implemented */
+	size_t sz;
+
+	if (page == NULL)
+		return;
+	sz = PAGE_SIZE << order;
+	if (page->kaddr != NULL)
+		kmem_free(page->kaddr, sz);
+	kmem_free(page, sizeof(struct page));
 }
 
 void
@@ -1010,6 +1035,19 @@ sg_free_table(struct sg_table *table)
 	kfree(table->sgl);
 	table->orig_nents = 0;
 	table->sgl = NULL;
+}
+
+/*
+ * sg_alloc_table_from_pages_segment — Phase 1 stub.
+ * Allocates a scatterlist with one entry per page (ignoring max_segment).
+ * A full implementation would coalesce contiguous pages up to max_segment.
+ */
+int
+sg_alloc_table_from_pages_segment(struct sg_table *sgt, struct page **pages,
+    unsigned int n_pages, unsigned long offset, unsigned long size,
+    unsigned int max_segment, gfp_t gfp_mask)
+{
+	return sg_alloc_table(sgt, n_pages, gfp_mask);
 }
 
 /* ===== I2C (Phase 1 stubs) ===== */
