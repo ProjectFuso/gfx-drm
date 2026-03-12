@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/int_types.h>
 #include <stdbool.h>
+#include <linux/compiler.h>
 
 typedef int8_t   __s8;
 typedef uint8_t  __u8;

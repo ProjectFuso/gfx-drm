@@ -53,6 +53,10 @@ _drm_openbsd_malloc(size_t size, int type, int flags)
 #include <linux/processor.h>	/* for CACHELINESIZE */
 
 #define ARCH_KMALLOC_MINALIGN	CACHELINESIZE
+#define ARCH_DMA_MINALIGN	ARCH_KMALLOC_MINALIGN
+
+/* illumos: NUMA-unaware stub */
+#define kmalloc_node_track_caller(size, gfp, nid)	kmalloc(size, gfp)
 
 #define ZERO_SIZE_PTR		NULL
 #define ZERO_OR_NULL_PTR(x)	((x) == NULL)

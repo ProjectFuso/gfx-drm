@@ -5,6 +5,7 @@
 
 #include <sys/kmem.h>
 #include <sys/types.h>
+#include <linux/types.h>
 #include <linux/mmzone.h>
 
 #define __GFP_ZERO		0x0001u	/* handled via kmem_zalloc */

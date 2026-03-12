@@ -61,6 +61,7 @@
 #define asm	__asm__
 #endif
 
+#define __malloc	__attribute__((__malloc__))
 #define __printf(x, y)	__attribute__((__format__(__printf__,x,y)))
 
 /* The Linux code doesn't meet our usual standards! */

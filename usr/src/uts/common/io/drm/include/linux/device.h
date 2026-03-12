@@ -16,6 +16,7 @@
 #include <linux/ratelimit.h> /* dev_printk.h -> ratelimit.h */
 #include <linux/module.h> /* via device/driver.h */
 #include <linux/device/bus.h>
+#include <linux/numa.h>		/* dev_to_node() */
 
 struct device_node;
 
