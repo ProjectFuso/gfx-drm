@@ -28,8 +28,6 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <sys/filio.h>
-
 #include <linux/export.h>
 #include <linux/nospec.h>
 #include <linux/pci.h>
@@ -604,18 +602,8 @@ static const struct drm_ioctl_desc drm_ioctls[] = {
 	DRM_IOCTL_DEF(DRM_IOCTL_UNBLOCK, drm_noop, DRM_AUTH|DRM_MASTER|DRM_ROOT_ONLY),
 	DRM_IOCTL_DEF(DRM_IOCTL_AUTH_MAGIC, drm_authmagic, DRM_MASTER),
 
-#ifdef __OpenBSD__
-	DRM_IOCTL_DEF(DRM_IOCTL_GET_PCIINFO, drm_getpciinfo, DRM_RENDER_ALLOW),
-#endif
-
-#ifdef __linux__
 	DRM_IOCTL_DEF(DRM_IOCTL_SET_MASTER, drm_setmaster_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_IOCTL_DROP_MASTER, drm_dropmaster_ioctl, 0),
-#else
-	/* On OpenBSD xorg privdrop has already occurred before this point */
-	DRM_IOCTL_DEF(DRM_IOCTL_SET_MASTER, drm_noop, 0),
-	DRM_IOCTL_DEF(DRM_IOCTL_DROP_MASTER, drm_noop, 0),
-#endif
 
 	DRM_IOCTL_DEF(DRM_IOCTL_ADD_DRAW, drm_noop, DRM_AUTH|DRM_MASTER|DRM_ROOT_ONLY),
 	DRM_IOCTL_DEF(DRM_IOCTL_RM_DRAW, drm_noop, DRM_AUTH|DRM_MASTER|DRM_ROOT_ONLY),
@@ -704,45 +692,6 @@ static const struct drm_ioctl_desc drm_ioctls[] = {
 
 #define DRM_CORE_IOCTL_COUNT	ARRAY_SIZE(drm_ioctls)
 
-int
-pledge_ioctl_drm(struct proc *p, long com, dev_t device)
-{
-	struct drm_device *dev = drm_get_device_from_kdev(device);
-	unsigned int nr = DRM_IOCTL_NR(com);
-	const struct drm_ioctl_desc *ioctl;
-
-	if (dev == NULL)
-		return EPERM;
-
-	if (nr < DRM_CORE_IOCTL_COUNT &&
-	    ((nr < DRM_COMMAND_BASE || nr >= DRM_COMMAND_END)))
-		ioctl = &drm_ioctls[nr];
-	else if (nr >= DRM_COMMAND_BASE && nr < DRM_COMMAND_END &&
-	    nr < DRM_COMMAND_BASE + dev->driver->num_ioctls)
-		ioctl = &dev->driver->ioctls[nr - DRM_COMMAND_BASE];
-	else
-		return EPERM;
-
-	if (ioctl->flags & DRM_RENDER_ALLOW)
-		return 0;
-
-	/*
-	 * These are dangerous, but we have to allow them until we
-	 * have prime/dma-buf support.
-	 */
-	switch (com) {
-	case DRM_IOCTL_GET_MAGIC:
-	case DRM_IOCTL_GEM_OPEN:
-		return 0;
-	}
-
-	/* for amdgpu libdrm */
-	if (com == DRM_IOCTL_GET_CLIENT)
-		return 0;
-
-	return EPERM;
-}
-
 /**
  * DOC: driver specific ioctls
  *
@@ -796,7 +745,7 @@ long drm_ioctl_kernel(struct file *file, drm_ioctl_t *func, void *kdata,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file_priv = file->private_data;
 	struct drm_device *dev = file_priv->minor->dev;
 	int ret;
@@ -833,7 +782,7 @@ long drm_ioctl(struct file *filp,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_device *dev;
 	const struct drm_ioctl_desc *ioctl = NULL;
@@ -960,111 +909,3 @@ bool drm_ioctl_flags(unsigned int nr, unsigned int *flags)
 }
 EXPORT_SYMBOL(drm_ioctl_flags);
 
-#ifndef __sun
-int
-drm_do_ioctl(struct drm_device *dev, int minor, u_long cmd, caddr_t data)
-{
-	struct drm_file *file_priv;
-	const struct drm_ioctl_desc *ioctl;
-	drm_ioctl_t *func;
-	unsigned int nr = DRM_IOCTL_NR(cmd);
-	int retcode = -EINVAL;
-	unsigned int usize, asize;
-	caddr_t adata = data;
-
-	mutex_lock(&dev->filelist_mutex);
-	file_priv = drm_find_file_by_minor(dev, minor);
-	mutex_unlock(&dev->filelist_mutex);
-	if (file_priv == NULL) {
-		DRM_ERROR("can't find authenticator\n");
-		return -EINVAL;
-	}
-
-	DRM_DEBUG("pid=%d, cmd=0x%02lx, nr=0x%02x, dev 0x%lx, auth=%d\n",
-	    curproc->p_p->ps_pid, cmd, (u_int)DRM_IOCTL_NR(cmd), (long)&dev->dev,
-	    file_priv->authenticated);
-
-	switch (cmd) {
-	case FIOASYNC:
-		return 0;
-	}
-
-	if ((nr >= DRM_CORE_IOCTL_COUNT) &&
-	    ((nr < DRM_COMMAND_BASE) || (nr >= DRM_COMMAND_END)))
-		return (-EINVAL);
-	if ((nr >= DRM_COMMAND_BASE) && (nr < DRM_COMMAND_END) &&
-	    (nr < DRM_COMMAND_BASE + dev->driver->num_ioctls)) {
-		uint32_t drv_size;
-		ioctl = &dev->driver->ioctls[nr - DRM_COMMAND_BASE];
-		drv_size = IOCPARM_LEN(ioctl->cmd);
-		usize = asize = IOCPARM_LEN(cmd);
-		if (drv_size > asize)
-			asize = drv_size;
-	} else if ((nr >= DRM_COMMAND_END) || (nr < DRM_COMMAND_BASE)) {
-		uint32_t drv_size;
-		ioctl = &drm_ioctls[nr];
-
-		drv_size = IOCPARM_LEN(ioctl->cmd);
-		usize = asize = IOCPARM_LEN(cmd);
-		if (drv_size > asize)
-			asize = drv_size;
-		cmd = ioctl->cmd;
-	} else
-		return (-EINVAL);
-
-	func = ioctl->func;
-	if (!func) {
-		DRM_DEBUG("no function\n");
-		return (-EINVAL);
-	}
-
-	retcode = drm_ioctl_permit(ioctl->flags, file_priv);
-	if (unlikely(retcode))
-		return retcode;
-
-	if (asize > usize) {
-		adata = malloc(asize, M_DRM, M_WAITOK | M_ZERO);
-		memcpy(adata, data, usize);
-	}
-
-	retcode = func(dev, adata, file_priv);
-
-	if (asize > usize) {
-		memcpy(data, adata, usize);
-		free(adata, M_DRM, asize);
-	}
-
-	return (retcode);
-}
-
-/* drmioctl is called whenever a process performs an ioctl on /dev/drm.
- */
-int
-drmioctl(dev_t kdev, u_long cmd, caddr_t data, int flags, struct proc *p)
-{
-	struct drm_device *dev = drm_get_device_from_kdev(kdev);
-	int error;
-
-	if (dev == NULL)
-		return ENODEV;
-
-	mtx_enter(&dev->quiesce_mtx);
-	while (dev->quiesce)
-		msleep_nsec(&dev->quiesce, &dev->quiesce_mtx, PZERO, "drmioc",
-		    INFSLP);
-	dev->quiesce_count++;
-	mtx_leave(&dev->quiesce_mtx);
-
-	error = -drm_do_ioctl(dev, minor(kdev), cmd, data);
-	if (error < 0 && error != ERESTART && error != EJUSTRETURN)
-		printf("%s: cmd 0x%lx errno %d\n", __func__, cmd, error);
-
-	mtx_enter(&dev->quiesce_mtx);
-	dev->quiesce_count--;
-	if (dev->quiesce)
-		wakeup(&dev->quiesce_count);
-	mtx_leave(&dev->quiesce_mtx);
-
-	return (error);
-}
-#endif /* !__sun */
