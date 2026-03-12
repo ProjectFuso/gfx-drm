@@ -7,3 +7,9 @@
 /usr/src/TAGS
 /usr/src/cscope.*
 
+
+# Build artifacts
+/usr/src/tools/proto/
+/usr/src/tools/cw/cw
+debug64/
+pax_global_header
