@@ -52,164 +52,6 @@
 
 #include "drm_internal.h"
 
-#if 0 /* removed: OpenBSD UVM-specific code, not needed for Linux→illumos */
-#include <sys/conf.h>
-#include <uvm/uvm.h>
-
-void drm_unref(struct uvm_object *);
-void drm_ref(struct uvm_object *);
-boolean_t drm_flush(struct uvm_object *, voff_t, voff_t, int);
-int drm_fault(struct uvm_faultinfo *, vaddr_t, vm_page_t *, int, int,
-    vm_fault_t, vm_prot_t, int);
-
-const struct uvm_pagerops drm_pgops = {
-	.pgo_reference = drm_ref,
-	.pgo_detach = drm_unref,
-	.pgo_fault = drm_fault,
-	.pgo_flush = drm_flush,
-};
-
-void
-drm_ref(struct uvm_object *uobj)
-{
-	struct drm_gem_object *obj =
-	    container_of(uobj, struct drm_gem_object, uobj);
-
-	drm_gem_object_get(obj);
-}
-
-void
-drm_unref(struct uvm_object *uobj)
-{
-	struct drm_gem_object *obj =
-	    container_of(uobj, struct drm_gem_object, uobj);
-
-	drm_gem_object_put(obj);
-}
-
-int
-drm_fault(struct uvm_faultinfo *ufi, vaddr_t vaddr, vm_page_t *pps,
-    int npages, int centeridx, vm_fault_t fault_type,
-    vm_prot_t access_type, int flags)
-{
-	struct vm_map_entry *entry = ufi->entry;
-	struct uvm_object *uobj = entry->object.uvm_obj;
-	struct drm_gem_object *obj =
-	    container_of(uobj, struct drm_gem_object, uobj);
-	struct drm_device *dev = obj->dev;
-	int ret;
-
-	/*
-	 * we do not allow device mappings to be mapped copy-on-write
-	 * so we kill any attempt to do so here.
-	 */
-	if (UVM_ET_ISCOPYONWRITE(entry)) {
-		uvmfault_unlockall(ufi, ufi->entry->aref.ar_amap, uobj);
-		return EACCES;
-	}
-
-	/*
-	 * We could end up here as the result of a copyin(9) or
-	 * copyout(9) while handling an ioctl.  So we must be careful
-	 * not to deadlock.  Therefore we only block if the quiesce
-	 * count is zero, which guarantees we didn't enter from within
-	 * an ioctl code path.
-	 */
-	mtx_enter(&dev->quiesce_mtx);
-	if (dev->quiesce && dev->quiesce_count == 0) {
-		mtx_leave(&dev->quiesce_mtx);
-		uvmfault_unlockall(ufi, ufi->entry->aref.ar_amap, uobj);
-		mtx_enter(&dev->quiesce_mtx);
-		while (dev->quiesce) {
-			msleep_nsec(&dev->quiesce, &dev->quiesce_mtx,
-			    PZERO, "drmflt", INFSLP);
-		}
-		mtx_leave(&dev->quiesce_mtx);
-		return ERESTART;
-	}
-	dev->quiesce_count++;
-	mtx_leave(&dev->quiesce_mtx);
-
-	/* Call down into driver to do the magic */
-	ret = dev->driver->gem_fault(obj, ufi, entry->offset + (vaddr -
-	    entry->start), vaddr, pps, npages, centeridx,
-	    access_type, flags);
-
-	mtx_enter(&dev->quiesce_mtx);
-	dev->quiesce_count--;
-	if (dev->quiesce)
-		wakeup(&dev->quiesce_count);
-	mtx_leave(&dev->quiesce_mtx);
-
-	return ret;
-}
-
-boolean_t	
-drm_flush(struct uvm_object *uobj, voff_t start, voff_t stop, int flags)
-{
-	return (TRUE);
-}
-
-struct uvm_object *
-udv_attach_drm(dev_t device, vm_prot_t accessprot, voff_t off, vsize_t size)
-{
-	struct drm_device *dev = drm_get_device_from_kdev(device);
-	struct drm_gem_object *obj = NULL;
-	struct drm_vma_offset_node *node;
-	struct drm_file *priv;
-	struct file *filp;
-
-	if (cdevsw[major(device)].d_mmap != drmmmap)
-		return NULL;
-
-	if (dev == NULL)
-		return NULL;
-
-	mutex_lock(&dev->filelist_mutex);
-	priv = drm_find_file_by_minor(dev, minor(device));
-	if (priv == NULL) {
-		mutex_unlock(&dev->filelist_mutex);
-		return NULL;
-	}
-	filp = priv->filp;
-	mutex_unlock(&dev->filelist_mutex);
-
-	if (dev->driver->mmap)
-		return dev->driver->mmap(filp, accessprot, off, size);
-
-	drm_vma_offset_lock_lookup(dev->vma_offset_manager);
-	node = drm_vma_offset_exact_lookup_locked(dev->vma_offset_manager,
-						  off >> PAGE_SHIFT,
-						  atop(round_page(size)));
-	if (likely(node)) {
-		obj = container_of(node, struct drm_gem_object, vma_node);
-		/*
-		 * When the object is being freed, after it hits 0-refcnt it
-		 * proceeds to tear down the object. In the process it will
-		 * attempt to remove the VMA offset and so acquire this
-		 * mgr->vm_lock.  Therefore if we find an object with a 0-refcnt
-		 * that matches our range, we know it is in the process of being
-		 * destroyed and will be freed as soon as we release the lock -
-		 * so we have to check for the 0-refcnted object and treat it as
-		 * invalid.
-		 */
-		if (!kref_get_unless_zero(&obj->refcount))
-			obj = NULL;
-	}
-	drm_vma_offset_unlock_lookup(dev->vma_offset_manager);
-
-	if (!obj)
-		return NULL;
-
-	if (!drm_vma_node_is_allowed(node, priv)) {
-		drm_gem_object_put(obj);
-		return NULL;
-	}
-
-	return &obj->uobj;
-}
-
-#endif /* 0: removed OpenBSD UVM code */
 
 /** @file drm_gem.c
  *
@@ -299,24 +141,6 @@ int drm_gem_object_init(struct drm_device *dev,
 	return 0;
 }
 EXPORT_SYMBOL(drm_gem_object_init);
-
-#elif !defined(__sun)	/* OpenBSD UVM-backed GEM object init */
-
-int drm_gem_object_init(struct drm_device *dev,
-			struct drm_gem_object *obj, size_t size)
-{
-	drm_gem_private_object_init(dev, obj, size);
-
-	if (size > (512 * 1024 * 1024)) {
-		printf("%s size too big %lu\n", __func__, size);
-		return -ENOMEM;
-	}
-
-	obj->uao = uao_create(size, 0);
-	uvm_obj_init(&obj->uobj, &drm_pgops, 1);
-
-	return 0;
-}
 
 #else	/* illumos: no shmem/UVM; private GEM objects only */
 
@@ -745,7 +569,7 @@ int drm_gem_create_mmap_offset(struct drm_gem_object *obj)
 }
 EXPORT_SYMBOL(drm_gem_create_mmap_offset);
 
-#ifdef notyet
+#ifdef __linux__
 /*
  * Move folios to appropriate lru and release the folios, decrementing the
  * ref count of those folios.
@@ -783,13 +607,11 @@ static void drm_gem_check_release_batch(struct folio_batch *fbatch)
  * drm_gem_object_init(), but not for those initialized with
  * drm_gem_private_object_init() only.
  */
-struct vm_page **drm_gem_get_pages(struct drm_gem_object *obj)
+struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 {
-	STUB();
-	return ERR_PTR(-ENOSYS);
-#ifdef notyet
+#ifdef __linux__
 	struct address_space *mapping;
-	struct vm_page **pages;
+	struct page **pages;
 	struct folio *folio;
 	struct folio_batch fbatch;
 	long i, j, npages;
@@ -808,7 +630,7 @@ struct vm_page **drm_gem_get_pages(struct drm_gem_object *obj)
 
 	npages = obj->size >> PAGE_SHIFT;
 
-	pages = kvmalloc_array(npages, sizeof(struct vm_page *), GFP_KERNEL);
+	pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
 	if (pages == NULL)
 		return ERR_PTR(-ENOMEM);
 
@@ -851,6 +673,9 @@ fail:
 
 	kvfree(pages);
 	return ERR_CAST(folio);
+#else
+	STUB();
+	return ERR_PTR(-ENOSYS);
 #endif
 }
 EXPORT_SYMBOL(drm_gem_get_pages);
@@ -862,11 +687,10 @@ EXPORT_SYMBOL(drm_gem_get_pages);
  * @dirty: if true, pages will be marked as dirty
  * @accessed: if true, the pages will be marked as accessed
  */
-void drm_gem_put_pages(struct drm_gem_object *obj, struct vm_page **pages,
+void drm_gem_put_pages(struct drm_gem_object *obj, struct page **pages,
 		bool dirty, bool accessed)
 {
-	STUB();
-#ifdef notyet
+#ifdef __linux__
 	int i, npages;
 	struct address_space *mapping;
 	struct folio_batch fbatch;
@@ -905,6 +729,8 @@ void drm_gem_put_pages(struct drm_gem_object *obj, struct vm_page **pages,
 		drm_gem_check_release_batch(&fbatch);
 
 	kvfree(pages);
+#else
+	STUB();
 #endif
 }
 EXPORT_SYMBOL(drm_gem_put_pages);
