@@ -2146,7 +2146,7 @@ int drm_dp_aux_register(struct drm_dp_aux *aux)
 	strscpy(aux->ddc.name, aux->name ? aux->name : dev_name(aux->dev),
 		sizeof(aux->ddc.name));
 
-#ifndef __sun
+#ifdef __linux__
 	ret = drm_dp_aux_register_devnode(aux);
 	if (ret)
 		return ret;
@@ -2154,7 +2154,7 @@ int drm_dp_aux_register(struct drm_dp_aux *aux)
 
 	ret = i2c_add_adapter(&aux->ddc);
 	if (ret) {
-#ifndef __sun
+#ifdef __linux__
 		drm_dp_aux_unregister_devnode(aux);
 #endif
 		return ret;
@@ -2170,7 +2170,7 @@ EXPORT_SYMBOL(drm_dp_aux_register);
  */
 void drm_dp_aux_unregister(struct drm_dp_aux *aux)
 {
-#ifndef __sun
+#ifdef __linux__
 	drm_dp_aux_unregister_devnode(aux);
 #endif
 	i2c_del_adapter(&aux->ddc);

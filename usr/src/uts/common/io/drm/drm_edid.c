@@ -2751,7 +2751,7 @@ void drm_edid_get_product_id(const struct drm_edid *drm_edid,
 }
 EXPORT_SYMBOL(drm_edid_get_product_id);
 
-#ifdef notyet
+#ifdef __linux__
 static void decode_date(struct seq_buf *s, const struct drm_edid_product_id *id)
 {
 	int week = id->week_of_manufacture;
@@ -2777,14 +2777,14 @@ static void decode_date(struct seq_buf *s, const struct drm_edid_product_id *id)
 void drm_edid_print_product_id(struct drm_printer *p,
 			       const struct drm_edid_product_id *id, bool raw)
 {
-#ifdef notyet
+#ifdef __linux__
 	DECLARE_SEQ_BUF(date, 40);
 #endif
 	char vend[4];
 
 	drm_edid_decode_mfg_id(be16_to_cpu(id->manufacturer_name), vend);
 
-#ifdef notyet
+#ifdef __linux__
 	decode_date(&date, id);
 
 	drm_printf(p, "manufacturer name: %s, product code: %u, serial number: %u, %s\n",
@@ -2799,7 +2799,7 @@ void drm_edid_print_product_id(struct drm_printer *p,
 	if (raw)
 		drm_printf(p, "raw product id: %*ph\n", (int)sizeof(*id), id);
 
-#ifdef notyet
+#ifdef __linux__
 	WARN_ON(seq_buf_has_overflowed(&date));
 #endif
 }
@@ -2908,7 +2908,7 @@ struct edid *drm_get_edid_switcheroo(struct drm_connector *connector,
 {
 	STUB();
 	return NULL;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_device *dev = connector->dev;
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	struct edid *edid;
@@ -2941,7 +2941,7 @@ const struct drm_edid *drm_edid_read_switcheroo(struct drm_connector *connector,
 {
 	STUB();
 	return NULL;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_device *dev = connector->dev;
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	const struct drm_edid *drm_edid;
@@ -4319,7 +4319,7 @@ cea_mode_alternate_timings(u8 vic, struct drm_display_mode *mode)
 	 * get the other variants by simply increasing the
 	 * vertical front porch length.
 	 */
-#ifdef notyet
+#ifdef __linux__
 	BUILD_BUG_ON(cea_mode_for_vic(8)->vtotal != 262 ||
 		     cea_mode_for_vic(9)->vtotal != 262 ||
 		     cea_mode_for_vic(12)->vtotal != 262 ||

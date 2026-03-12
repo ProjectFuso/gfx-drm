@@ -413,7 +413,7 @@ bool drm_is_panel_follower(struct device *dev)
 {
 	STUB();
 	return false;
-#ifdef notyet
+#ifdef __linux__
 	/*
 	 * The "panel" property is actually a phandle, but for simplicity we
 	 * don't bother trying to parse it here. We just need to know if the
@@ -449,7 +449,7 @@ int drm_panel_add_follower(struct device *follower_dev,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct device_node *panel_np;
 	struct drm_panel *panel;
 	int ret;
@@ -495,7 +495,7 @@ EXPORT_SYMBOL(drm_panel_add_follower);
 void drm_panel_remove_follower(struct drm_panel_follower *follower)
 {
 	STUB();
-#ifdef notyet
+#ifdef __linux__
 	struct drm_panel *panel = follower->panel;
 	int ret;
 
@@ -516,7 +516,7 @@ void drm_panel_remove_follower(struct drm_panel_follower *follower)
 }
 EXPORT_SYMBOL(drm_panel_remove_follower);
 
-#ifdef notyet
+#ifdef __linux__
 static void drm_panel_remove_follower_void(void *follower)
 {
 	drm_panel_remove_follower(follower);
@@ -537,7 +537,7 @@ int devm_drm_panel_add_follower(struct device *follower_dev,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	int ret;
 
 	ret = drm_panel_add_follower(follower_dev, follower);

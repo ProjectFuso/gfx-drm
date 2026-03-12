@@ -2274,7 +2274,7 @@ void drm_dp_mst_connector_early_unregister(struct drm_connector *connector,
 	drm_dbg_kms(port->mgr->dev, "unregistering %s remote bus\n",
 		    port->aux.name);
 #endif
-#ifndef __sun
+#ifdef __linux__
 	drm_dp_aux_unregister_devnode(&port->aux);
 #endif
 }

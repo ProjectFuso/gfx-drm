@@ -144,7 +144,7 @@ int devm_aperture_acquire_from_firmware(struct drm_device *dev, resource_size_t 
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct platform_device *pdev;
 
 	if (drm_WARN_ON(dev, !dev_is_platform(dev->dev)))

@@ -886,4 +886,4 @@ void drm_panic_exit(void)
 	drm_panic_qr_exit();
 }
 
-#endif /* !__sun */
+#endif /* __linux__ */

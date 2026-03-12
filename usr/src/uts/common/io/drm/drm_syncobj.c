@@ -314,7 +314,7 @@ syncobj_eventfd_entry_free(struct syncobj_eventfd_entry *entry)
 	kfree(entry);
 }
 
-#ifdef notyet
+#ifdef __linux__
 static void
 drm_syncobj_add_eventfd(struct drm_syncobj *syncobj,
 			struct syncobj_eventfd_entry *entry)
@@ -658,7 +658,7 @@ static int drm_syncobj_destroy(struct drm_file *file_private,
 	return 0;
 }
 
-#ifdef notyet
+#ifdef __linux__
 static int drm_syncobj_file_release(struct inode *inode, struct file *file)
 {
 	struct drm_syncobj *syncobj = file->private_data;
@@ -685,7 +685,7 @@ int drm_syncobj_get_fd(struct drm_syncobj *syncobj, int *p_fd)
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct file *file;
 	int fd;
 
@@ -729,7 +729,7 @@ static int drm_syncobj_fd_to_handle(struct drm_file *file_private,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_syncobj *syncobj;
 	struct fd f = fdget(fd);
 	int ret;
@@ -1527,7 +1527,7 @@ drm_syncobj_eventfd_ioctl(struct drm_device *dev, void *data,
 			  struct drm_file *file_private)
 {
 	return -EOPNOTSUPP;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_syncobj_eventfd *args = data;
 	struct drm_syncobj *syncobj;
 	struct eventfd_ctx *ev_fd_ctx;

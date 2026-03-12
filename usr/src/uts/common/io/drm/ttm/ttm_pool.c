@@ -374,7 +374,7 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt, struct vm_page *p)
 	struct ttm_pool_type_lru *entry;
 
 	for (i = 0; i < num_pages; ++i) {
-#ifdef notyet
+#ifdef __linux__
 		if (PageHighMem(p))
 			clear_highpage(p + i);
 		else
@@ -504,7 +504,7 @@ static unsigned int ttm_pool_shrink(void)
 	return num_pages;
 }
 
-#ifdef notyet
+#ifdef __linux__
 
 /* Return the allocation order based for a page */
 static unsigned int ttm_pool_page_order(struct ttm_pool *pool, struct vm_page *p)
@@ -821,7 +821,7 @@ static unsigned long ttm_pool_shrinker_scan(struct shrinker *shrink,
 static unsigned long ttm_pool_shrinker_count(struct shrinker *shrink,
 					     struct shrink_control *sc)
 {
-#ifdef notyet
+#ifdef __linux__
 	unsigned long num_pages = atomic_long_read(&allocated_pages);
 
 	return num_pages ? num_pages : SHRINK_EMPTY;

@@ -213,7 +213,7 @@ void drm_bridge_add(struct drm_bridge *bridge)
 }
 EXPORT_SYMBOL(drm_bridge_add);
 
-#ifdef notyet
+#ifdef __linux__
 static void drm_bridge_remove_void(void *bridge)
 {
 	drm_bridge_remove(bridge);
@@ -234,7 +234,7 @@ static void drm_bridge_remove_void(void *bridge)
 int devm_drm_bridge_add(struct device *dev, struct drm_bridge *bridge)
 {
 	drm_bridge_add(bridge);
-#ifdef notyet
+#ifdef __linux__
 	return devm_add_action_or_reset(dev, drm_bridge_remove_void, bridge);
 #else
 	STUB();

@@ -109,6 +109,6 @@ get_random_bytes(void *buf, int nbytes)
 	arc4random_buf(buf, nbytes);
 }
 
-#endif /* !__sun */
+#endif /* __linux__ */
 
 #endif

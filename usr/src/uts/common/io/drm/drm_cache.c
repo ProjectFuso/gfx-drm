@@ -188,7 +188,7 @@ EXPORT_SYMBOL(drm_clflush_virt_range);
 bool drm_need_swiotlb(int dma_bits)
 {
 	return false;
-#ifdef notyet
+#ifdef __linux__
 	struct resource *tmp;
 	resource_size_t max_iomem = 0;
 

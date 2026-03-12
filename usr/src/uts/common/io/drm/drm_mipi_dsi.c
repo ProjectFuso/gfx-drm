@@ -48,7 +48,7 @@
  * subset of the MIPI DCS command set.
  */
 
-#ifdef notyet
+#ifdef __linux__
 
 static int mipi_dsi_device_match(struct device *dev, const struct device_driver *drv)
 {
@@ -287,7 +287,7 @@ devm_mipi_dsi_device_register_full(struct device *dev,
 
 	STUB();
 	return ERR_PTR(-ENOSYS);
-#ifdef notyet
+#ifdef __linux__
 	ret = devm_add_action_or_reset(dev,
 				       devm_mipi_dsi_device_unregister,
 				       dsi);
@@ -443,7 +443,7 @@ int devm_mipi_dsi_attach(struct device *dev,
 
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	ret = devm_add_action_or_reset(dev, devm_mipi_dsi_detach, dsi);
 	if (ret)
 		return ret;
@@ -1345,7 +1345,7 @@ int mipi_dsi_dcs_set_pixel_format(struct mipi_dsi_device *dsi, u8 format)
 }
 EXPORT_SYMBOL(mipi_dsi_dcs_set_pixel_format);
 
-#ifdef notyet
+#ifdef __linux__
 
 /**
  * mipi_dsi_dcs_set_tear_scanline() - set the scanline to use as trigger for

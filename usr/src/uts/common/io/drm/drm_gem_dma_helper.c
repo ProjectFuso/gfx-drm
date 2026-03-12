@@ -72,7 +72,7 @@ drm_gem_dma_create_internal(struct drm_device *ddev, size_t size,
 
 	if (sgt) {
 		STUB();
-#ifdef notyet
+#ifdef __linux__
 		error = -drm_prime_sg_to_bus_dmamem(obj->dmat, obj->dmasegs, 1,
 		    &nsegs, sgt);
 #endif
@@ -98,7 +98,7 @@ drm_gem_dma_create_internal(struct drm_device *ddev, size_t size,
 	if (error)
 		goto destroy;
 
-#ifdef notyet
+#ifdef __linux__
 	if (!sgt)
 #endif
 		memset(obj->vaddr, 0, obj->dmasize);
@@ -117,7 +117,7 @@ destroy:
 unmap:
 	bus_dmamem_unmap(obj->dmat, obj->vaddr, obj->dmasize);
 free:
-#ifdef notyet
+#ifdef __linux__
 	if (obj->sgt)
 		drm_prime_sg_free(obj->sgt);
 	else
@@ -143,7 +143,7 @@ drm_gem_dma_obj_free(struct drm_gem_dma_object *obj)
 	bus_dmamap_unload(obj->dmat, obj->dmamap);
 	bus_dmamap_destroy(obj->dmat, obj->dmamap);
 	bus_dmamem_unmap(obj->dmat, obj->vaddr, obj->dmasize);
-#ifdef notyet
+#ifdef __linux__
 	if (obj->sgt)
 		drm_prime_sg_free(obj->sgt);
 	else
@@ -249,7 +249,7 @@ struct sg_table *
 drm_gem_dma_get_sg_table(struct drm_gem_object *gem_obj)
 {
 	return NULL;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_gem_dma_object *obj = to_drm_gem_dma_obj(gem_obj);
 
 	return drm_prime_bus_dmamem_to_sg(obj->dmat, obj->dmasegs, 1);
@@ -261,7 +261,7 @@ drm_gem_dma_prime_import_sg_table(struct drm_device *ddev,
     struct dma_buf_attachment *attach, struct sg_table *sgt)
 {
 	return NULL;
-#ifdef notyet
+#ifdef __linux__
 	size_t size = drm_prime_sg_size(sgt);
 	struct drm_gem_dma_object *obj;
 
@@ -283,4 +283,4 @@ drm_gem_dma_vmap(struct drm_gem_object *gem_obj, struct iosys_map *map)
 	return 0;
 }
 
-#endif /* !__sun */
+#endif /* __linux__ */

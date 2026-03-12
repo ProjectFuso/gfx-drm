@@ -425,7 +425,7 @@ int drm_release(struct inode *inode, struct file *filp)
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_minor *minor = file_priv->minor;
 	struct drm_device *dev = minor->dev;
@@ -452,7 +452,7 @@ EXPORT_SYMBOL(drm_release);
 
 void drm_file_update_pid(struct drm_file *filp)
 {
-#ifdef notyet
+#ifdef __linux__
 	struct drm_device *dev;
 	struct pid *pid, *old;
 #endif
@@ -466,7 +466,7 @@ void drm_file_update_pid(struct drm_file *filp)
 		return;
 
 	STUB();
-#ifdef notyet
+#ifdef __linux__
 	pid = task_tgid(current);
 
 	/*
@@ -504,7 +504,7 @@ int drm_release_noglobal(struct inode *inode, struct file *filp)
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_minor *minor = file_priv->minor;
 	struct drm_device *dev = minor->dev;
@@ -552,7 +552,7 @@ ssize_t drm_read(struct file *filp, char __user *buffer,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_device *dev = file_priv->minor->dev;
 	ssize_t ret;
@@ -620,7 +620,7 @@ put_back_event:
 }
 EXPORT_SYMBOL(drm_read);
 
-#ifdef notyet
+#ifdef __linux__
 /**
  * drm_poll - poll method for DRM file
  * @filp: file pointer
@@ -972,7 +972,7 @@ EXPORT_SYMBOL(drm_show_memory_stats);
 void drm_show_fdinfo(struct seq_file *m, struct file *f)
 {
 	STUB();
-#ifdef notyet
+#ifdef __linux__
 	struct drm_file *file = f->private_data;
 	struct drm_device *dev = file->minor->dev;
 	struct drm_printer p = drm_seq_file_printer(m);
@@ -1018,7 +1018,7 @@ struct file *mock_drm_getfile(struct drm_minor *minor, unsigned int flags)
 {
 	STUB();
 	return ERR_PTR(-ENOSYS);
-#ifdef notyet
+#ifdef __linux__
 	struct drm_device *dev = minor->dev;
 	struct drm_file *priv;
 	struct file *file;

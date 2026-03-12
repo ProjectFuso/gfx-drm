@@ -28,7 +28,7 @@
 
 #include <drm/drm_encoder_slave.h>
 
-#ifdef notyet
+#ifdef __linux__
 /**
  * drm_i2c_encoder_init - Initialize an I2C slave encoder
  * @dev:	DRM device.

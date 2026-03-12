@@ -287,7 +287,7 @@ int drm_vblank_worker_init(struct drm_vblank_crtc *vblank)
 
 	vblank->worker = worker;
 
-#ifdef notyet
+#ifdef __linux__
 	sched_set_fifo(worker->task);
 #endif
 	return 0;

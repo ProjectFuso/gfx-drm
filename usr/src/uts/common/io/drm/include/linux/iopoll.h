@@ -57,6 +57,6 @@
 	}								\
 	(__timed_out) ? -ETIMEDOUT : 0;					\
 })
-#endif /* !__sun */
+#endif /* __linux__ */
 
 #endif

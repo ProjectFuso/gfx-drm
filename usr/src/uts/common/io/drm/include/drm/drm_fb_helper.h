@@ -220,7 +220,7 @@ drm_fb_helper_from_client(struct drm_client_dev *client)
  * Helper define to register default implementations of drm_fb_helper
  * functions. To be used in struct fb_ops of drm drivers.
  */
-#ifdef notyet
+#ifdef __linux__
 #define DRM_FB_HELPER_DEFAULT_OPS \
 	.fb_check_var	= drm_fb_helper_check_var, \
 	.fb_set_par	= drm_fb_helper_set_par, \

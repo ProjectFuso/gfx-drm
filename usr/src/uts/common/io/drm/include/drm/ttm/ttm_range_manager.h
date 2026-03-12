@@ -43,7 +43,7 @@ static __always_inline int ttm_range_man_init(struct ttm_device *bdev,
 		       unsigned int type, bool use_tt,
 		       unsigned long p_size)
 {
-#ifdef notyet
+#ifdef __linux__
 	BUILD_BUG_ON(__builtin_constant_p(type) && type >= TTM_NUM_MEM_TYPES);
 #endif
 	return ttm_range_man_init_nocheck(bdev, type, use_tt, p_size);
@@ -52,7 +52,7 @@ static __always_inline int ttm_range_man_init(struct ttm_device *bdev,
 static __always_inline int ttm_range_man_fini(struct ttm_device *bdev,
 		       unsigned int type)
 {
-#ifdef notyet
+#ifdef __linux__
 	BUILD_BUG_ON(__builtin_constant_p(type) && type >= TTM_NUM_MEM_TYPES);
 #endif
 	return ttm_range_man_fini_nocheck(bdev, type);

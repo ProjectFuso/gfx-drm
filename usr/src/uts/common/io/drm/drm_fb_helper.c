@@ -174,7 +174,7 @@ int drm_fb_helper_debug_leave(struct fb_info *info)
 {
 	struct drm_fb_helper *helper = info->par;
 	struct drm_client_dev *client = &helper->client;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_device *dev = helper->dev;
 #endif
 	struct drm_crtc *crtc;
@@ -1378,7 +1378,7 @@ int drm_fb_helper_set_par(struct fb_info *info)
 }
 EXPORT_SYMBOL(drm_fb_helper_set_par);
 
-#ifdef notyet
+#ifdef __linux__
 static void pan_set(struct drm_fb_helper *fb_helper, int dx, int dy)
 {
 	struct drm_mode_set *mode_set;
@@ -1397,7 +1397,7 @@ static int pan_display_atomic(struct fb_var_screeninfo *var,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_fb_helper *fb_helper = info->par;
 	int ret, dx, dy;
 
@@ -1421,7 +1421,7 @@ static int pan_display_legacy(struct fb_var_screeninfo *var,
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_fb_helper *fb_helper = info->par;
 	struct drm_client_dev *client = &fb_helper->client;
 	struct drm_mode_set *modeset;
@@ -1735,7 +1735,7 @@ static void drm_fb_helper_fill_var(struct fb_info *info,
 		break;
 	}
 
-#ifdef notyet
+#ifdef __linux__
 	info->pseudo_palette = fb_helper->pseudo_palette;
 	info->var.xoffset = 0;
 	info->var.yoffset = 0;

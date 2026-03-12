@@ -51,7 +51,7 @@ int ttm_agp_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 {
 	STUB();
 	return -ENOSYS;
-#ifdef notyet
+#ifdef __linux__
 	struct ttm_agp_backend *agp_be = container_of(ttm, struct ttm_agp_backend, ttm);
 	struct vm_page *dummy_read_page = ttm_glob.dummy_read_page;
 	struct agp_memory *mem;
@@ -91,7 +91,7 @@ EXPORT_SYMBOL(ttm_agp_bind);
 void ttm_agp_unbind(struct ttm_tt *ttm)
 {
 	STUB();
-#ifdef notyet
+#ifdef __linux__
 	struct ttm_agp_backend *agp_be = container_of(ttm, struct ttm_agp_backend, ttm);
 
 	if (agp_be->mem) {
@@ -110,7 +110,7 @@ bool ttm_agp_is_bound(struct ttm_tt *ttm)
 {
 	STUB();
 	return false;
-#ifdef notyet
+#ifdef __linux__
 	struct ttm_agp_backend *agp_be = container_of(ttm, struct ttm_agp_backend, ttm);
 
 	if (!ttm)
@@ -124,7 +124,7 @@ EXPORT_SYMBOL(ttm_agp_is_bound);
 void ttm_agp_destroy(struct ttm_tt *ttm)
 {
 	STUB();
-#ifdef notyet
+#ifdef __linux__
 	struct ttm_agp_backend *agp_be = container_of(ttm, struct ttm_agp_backend, ttm);
 
 	if (agp_be->bound)

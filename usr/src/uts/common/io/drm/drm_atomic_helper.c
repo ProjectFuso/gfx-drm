@@ -841,7 +841,7 @@ drm_atomic_helper_check_wb_connector_state(struct drm_connector *connector,
 	struct drm_connector_state *conn_state =
 		drm_atomic_get_new_connector_state(state, connector);
 	struct drm_writeback_job *wb_job = conn_state->writeback_job;
-#ifdef notyet
+#ifdef __linux__
 	struct drm_property_blob *pixel_format_blob;
 	struct drm_framebuffer *fb;
 	size_t i, nformats;
@@ -851,7 +851,7 @@ drm_atomic_helper_check_wb_connector_state(struct drm_connector *connector,
 	if (!wb_job || !wb_job->fb)
 		return 0;
 
-#ifdef notyet
+#ifdef __linux__
 	pixel_format_blob = wb_job->connector->pixel_formats_blob_ptr;
 	nformats = pixel_format_blob->length / sizeof(u32);
 	formats = pixel_format_blob->data;

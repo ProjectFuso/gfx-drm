@@ -68,7 +68,7 @@ static void drm_fbdev_dma_fb_destroy(struct fb_info *info)
 #endif /* __linux__ */
 
 static const struct fb_ops drm_fbdev_dma_fb_ops = {
-#ifdef notyet
+#ifdef __linux__
 	.owner = THIS_MODULE,
 	.fb_open = drm_fbdev_dma_fb_open,
 	.fb_release = drm_fbdev_dma_fb_release,
@@ -109,7 +109,7 @@ static void drm_fbdev_dma_shadowed_fb_destroy(struct fb_info *info)
 #endif /* __linux__ */
 
 static const struct fb_ops drm_fbdev_dma_shadowed_fb_ops = {
-#ifdef notyet
+#ifdef __linux__
 	.owner = THIS_MODULE,
 	.fb_open = drm_fbdev_dma_fb_open,
 	.fb_release = drm_fbdev_dma_fb_release,
@@ -256,7 +256,7 @@ static int drm_fbdev_dma_driver_fbdev_probe_tail_shadowed(struct drm_fb_helper *
 	struct fb_info *info = fb_helper->info;
 	size_t screen_size = buffer->gem->size;
 	void *screen_buffer;
-#ifdef notyet
+#ifdef __linux__
 	int ret;
 #endif
 
@@ -277,7 +277,7 @@ static int drm_fbdev_dma_driver_fbdev_probe_tail_shadowed(struct drm_fb_helper *
 	info->screen_buffer = screen_buffer;
 	info->fix.smem_len = screen_size;
 
-#ifdef notyet
+#ifdef __linux__
 	fb_helper->fbdefio.delay = HZ / 20;
 	fb_helper->fbdefio.deferred_io = drm_fb_helper_deferred_io;
 
