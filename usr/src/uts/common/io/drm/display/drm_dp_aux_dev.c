@@ -42,6 +42,12 @@
 
 #include "drm_dp_helper_internal.h"
 
+#ifdef __sun
+/* illumos: stub out Linux VFS / chardev aux-dev implementation */
+/* drm_dp_aux_register/unregister are defined in drm_dp_helper.c */
+int __drm_dp_aux_dev_illumos_stub;
+#else /* !__sun */
+
 struct drm_dp_aux_dev {
 	unsigned index;
 	struct drm_dp_aux *aux;
@@ -352,3 +358,4 @@ void drm_dp_aux_dev_exit(void)
 	unregister_chrdev(drm_dev_major, "aux");
 	class_destroy(drm_dp_aux_dev_class);
 }
+#endif /* \!__sun */

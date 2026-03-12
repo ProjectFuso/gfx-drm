@@ -167,9 +167,11 @@ static void ttm_tt_init_fields(struct ttm_tt *ttm,
 	ttm->swap_storage = NULL;
 	ttm->sg = bo->sg;
 	ttm->caching = caching;
+#ifndef __sun	/* OpenBSD bus_dma fields */
 	ttm->dmat = bo->bdev->dmat;
 	ttm->map = NULL;
 	ttm->segs = NULL;
+#endif
 }
 
 int ttm_tt_init(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
@@ -190,8 +192,10 @@ void ttm_tt_fini(struct ttm_tt *ttm)
 {
 	WARN_ON(ttm->page_flags & TTM_TT_FLAG_PRIV_POPULATED);
 
+#ifndef __sun
 	if (ttm->swap_storage)
 		uao_detach(ttm->swap_storage);
+#endif
 	ttm->swap_storage = NULL;
 
 	if (ttm->pages)
@@ -203,11 +207,13 @@ void ttm_tt_fini(struct ttm_tt *ttm)
 	ttm->dma_address = NULL;
 	ttm->orders = NULL;
 
+#ifndef __sun
 	if (ttm->map)
 		bus_dmamap_destroy(ttm->dmat, ttm->map);
 	if (ttm->segs)
 		km_free(ttm->segs, round_page(ttm->num_pages *
 		    sizeof(bus_dma_segment_t)), &kv_any, &kp_zero);
+#endif
 }
 EXPORT_SYMBOL(ttm_tt_fini);
 
@@ -215,7 +221,9 @@ int ttm_sg_tt_init(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
 		   uint32_t page_flags, enum ttm_caching caching)
 {
 	int ret;
+#ifndef __sun
 	int flags = BUS_DMA_WAITOK;
+#endif
 
 	ttm_tt_init_fields(ttm, bo, page_flags, caching, 0);
 
@@ -228,6 +236,7 @@ int ttm_sg_tt_init(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
 		return -ENOMEM;
 	}
 
+#ifndef __sun
 	ttm->segs = km_alloc(round_page(ttm->num_pages *
 	    sizeof(bus_dma_segment_t)), &kv_any, &kp_zero, &kd_waitok);
 
@@ -249,6 +258,7 @@ int ttm_sg_tt_init(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
 		pr_err("Failed allocating page table\n");
 		return -ENOMEM;
 	}
+#endif /* !__sun */
 
 	return 0;
 }
@@ -256,6 +266,11 @@ EXPORT_SYMBOL(ttm_sg_tt_init);
 
 int ttm_tt_swapin(struct ttm_tt *ttm)
 {
+#ifdef __sun
+	/* illumos Phase 1: no UVM swapping */
+	(void)ttm;
+	return -ENOSYS;
+#else /* OpenBSD UVM swapin */
 	struct uvm_object *swap_storage;
 	struct vm_page *from_page;
 	struct vm_page *to_page;
@@ -294,6 +309,7 @@ int ttm_tt_swapin(struct ttm_tt *ttm)
 
 out_err:
 	return ret;
+#endif /* !__sun */
 }
 EXPORT_SYMBOL_FOR_TESTS_ONLY(ttm_tt_swapin);
 
@@ -477,10 +493,10 @@ static void ttm_kmap_iter_tt_map_local(struct ttm_kmap_iter *iter,
 	struct ttm_kmap_iter_tt *iter_tt =
 		container_of(iter, typeof(*iter_tt), base);
 
-#ifdef __linux__
+#if defined(__linux__)
 	iosys_map_set_vaddr(dmap, kmap_local_page_prot(iter_tt->tt->pages[i],
 						       iter_tt->prot));
-#else
+#else /* OpenBSD / illumos */
 	iosys_map_set_vaddr(dmap, kmap_atomic_prot(iter_tt->tt->pages[i],
 						       iter_tt->prot));
 #endif
@@ -489,9 +505,9 @@ static void ttm_kmap_iter_tt_map_local(struct ttm_kmap_iter *iter,
 static void ttm_kmap_iter_tt_unmap_local(struct ttm_kmap_iter *iter,
 					 struct iosys_map *map, bus_space_tag_t bst)
 {
-#ifdef __linux__
+#if defined(__linux__)
 	kunmap_local(map->vaddr);
-#else
+#else /* OpenBSD / illumos */
 	kunmap_atomic(map->vaddr);
 #endif
 }

@@ -25,10 +25,26 @@ typedef uintptr_t bus_space_handle_t;
 typedef size_t bus_size_t;
 
 /*
- * bus_dma_tag_t:
- * OpenBSD DMA tag.  On illumos the equivalent is ddi_dma_handle_t, but
- * Phase 1 only uses kmem_alloc-backed coherent memory; stub as void *.
+ * bus_dma_tag_t / bus_dmamap_t / bus_dma_segment_t:
+ * OpenBSD DMA types.  On illumos the equivalents are DDI DMA handles/cookies.
+ * Phase 1 stubs: opaque pointer / struct so the DRM sources compile.
  */
 typedef void *bus_dma_tag_t;
+typedef void *bus_dmamap_t;
+
+struct bus_dma_segment {
+	uintptr_t	ds_addr;	/* DMA address */
+	size_t		ds_len;		/* length of transfer */
+};
+typedef struct bus_dma_segment bus_dma_segment_t;
+
+/*
+ * bus_dma flags (OpenBSD): used in pool allocations / dmamem calls.
+ * Stub as 0 since actual DMA wiring is done in driver shims.
+ */
+#define BUS_DMA_NOWAIT		0x0001
+#define BUS_DMA_ALLOCNOW	0x0002
+#define BUS_DMA_ZERO		0x0010
+#define BUS_DMA_WAITOK		0x0000
 
 #endif /* _SYS_BUS_COMPAT_H */

@@ -132,10 +132,15 @@ static inline void list_move(struct list_head *list, struct list_head *head)
 }
 
 /*
- * list_move_tail: defined as a macro to avoid name conflict with illumos
- * sys/list.h which declares void list_move_tail(list_t *, list_t *).
- * Both are pulled into the same translation unit via sys/rwlock.h.
+ * list_move_tail: pre-include sys/list.h NOW so that its declaration of
+ * void list_move_tail(list_t *, list_t *) is processed BEFORE we define
+ * the list_move_tail macro.  If sys/list.h were included later (e.g. via
+ * sys/kmem.h → sys/vmem.h → sys/list.h), the preprocessor would expand
+ * list_move_tail(list_t *, list_t *) using our macro, producing a
+ * conflicting implicit declaration of __linux_list_move_tail.
  */
+#include <sys/list.h>
+
 static inline void
 __linux_list_move_tail(struct list_head *list, struct list_head *head)
 {
@@ -171,10 +176,10 @@ list_del_init(struct list_head *entry) {
 }
 
 #define list_next_entry(pos, member)				\
-	list_entry(((pos)->member.next), typeof(*(pos)), member)
+	list_entry(((pos)->member.next), __typeof__(*(pos)), member)
 
 #define list_prev_entry(pos, member)				\
-	list_entry(((pos)->member.prev), typeof(*(pos)), member)
+	list_entry(((pos)->member.prev), __typeof__(*(pos)), member)
 
 #define list_safe_reset_next(pos, n, member)			\
 	n = list_next_entry(pos, member)

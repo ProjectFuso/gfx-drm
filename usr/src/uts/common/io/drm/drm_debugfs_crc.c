@@ -39,6 +39,8 @@
 
 #include "drm_internal.h"
 
+#if defined(CONFIG_DEBUG_FS)
+
 /**
  * DOC: CRC ABI
  *
@@ -436,3 +438,5 @@ int drm_crtc_add_crc_entry(struct drm_crtc *crtc, bool has_frame,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(drm_crtc_add_crc_entry);
+
+#endif /* CONFIG_DEBUG_FS */

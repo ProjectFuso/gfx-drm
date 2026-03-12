@@ -18,7 +18,8 @@ refcount_dec_and_test(uint32_t *p)
 static inline bool
 refcount_inc_not_zero(uint32_t *p)
 {
-	return atomic_inc_not_zero(p);
+	/* atomic_inc_not_zero expects volatile int *; cast is safe */
+	return atomic_inc_not_zero((volatile int *)p);
 }
 
 static inline void

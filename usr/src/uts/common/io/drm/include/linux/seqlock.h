@@ -3,10 +3,21 @@
 #ifndef _LINUX_SEQLOCK_H
 #define _LINUX_SEQLOCK_H
 
+/*
+ * illumos: break the circular include chain.
+ * linux/mutex.h includes linux/lockdep.h which (via smp/kernel/slab/workqueue/
+ * timer/ktime/time chain) includes linux/seqlock.h before mutex.h finishes.
+ * Avoid this by including sys/rwlock.h directly and using krwlock_t in
+ * seqlock_t instead of struct mutex.
+ */
 #include <sys/types.h>
 #include <sys/atomic.h>
+#include <sys/rwlock.h>		/* krwlock_t, rw_init, rw_enter, rw_exit */
+
+/* Forward-declare before lockdep.h (which hasn't finished yet) */
+struct lock_class_key;
+
 #include <linux/lockdep.h>
-#include <linux/mutex.h>	/* struct mutex, mutex_init, mutex_lock, mutex_unlock */
 #include <linux/processor.h>
 #include <linux/preempt.h>
 #include <linux/compiler.h>
@@ -86,20 +97,20 @@ raw_read_seqcount(const seqcount_t *s)
 
 typedef struct {
 	unsigned int seq;
-	struct mutex lock;
+	krwlock_t lock;		/* illumos: krwlock_t directly (avoids circular include) */
 } seqlock_t;
 
 static inline void
 seqlock_init(seqlock_t *sl, int wantipl)
 {
 	sl->seq = 0;
-	mutex_init(&sl->lock);	/* illumos: wantipl ignored */
+	rw_init(&sl->lock, NULL, RW_DEFAULT, NULL);	/* wantipl ignored */
 }
 
 static inline void
 write_seqlock(seqlock_t *sl)
 {
-	mutex_lock(&sl->lock);
+	rw_enter(&sl->lock, RW_WRITER);
 	sl->seq++;
 	membar_producer();
 }
@@ -107,7 +118,7 @@ write_seqlock(seqlock_t *sl)
 static inline void
 __write_seqlock_irqsave(seqlock_t *sl)
 {
-	mutex_lock(&sl->lock);
+	rw_enter(&sl->lock, RW_WRITER);
 	sl->seq++;
 	membar_producer();
 }
@@ -121,7 +132,7 @@ write_sequnlock(seqlock_t *sl)
 {
 	membar_producer();
 	sl->seq++;
-	mutex_unlock(&sl->lock);
+	rw_exit(&sl->lock);
 }
 
 static inline void
@@ -129,7 +140,7 @@ __write_sequnlock_irqrestore(seqlock_t *sl)
 {
 	membar_producer();
 	sl->seq++;
-	mutex_unlock(&sl->lock);
+	rw_exit(&sl->lock);
 }
 #define write_sequnlock_irqrestore(_sl, _flags) do {		\
 		(void)(_flags);					\

@@ -1009,7 +1009,7 @@ void ttm_bo_unmap_virtual(struct ttm_buffer_object *bo)
 {
 	struct ttm_device *bdev = bo->bdev;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	drm_vma_node_unmap(&bo->base.vma_node, bdev->dev_mapping);
 #else
 	if (drm_mm_node_allocated(&bo->base.vma_node.vm_node)) {

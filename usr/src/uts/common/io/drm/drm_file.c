@@ -150,7 +150,7 @@ struct drm_file *drm_file_alloc(struct drm_minor *minor)
 
 	INIT_LIST_HEAD(&file->lhead);
 	INIT_LIST_HEAD(&file->fbs);
-	rw_init(&file->fbs_lock, "fbslk");
+	drm_rw_init(&file->fbs_lock, "fbslk");
 	INIT_LIST_HEAD(&file->blobs);
 	INIT_LIST_HEAD(&file->pending_event_list);
 	INIT_LIST_HEAD(&file->event_list);
@@ -158,7 +158,7 @@ struct drm_file *drm_file_alloc(struct drm_minor *minor)
 	file->event_space = 4096; /* set aside 4k for event buffer */
 
 	mtx_init(&file->master_lookup_lock, IPL_NONE);
-	rw_init(&file->event_read_lock, "evread");
+	drm_rw_init(&file->event_read_lock, "evread");
 
 	if (drm_core_check_feature(dev, DRIVER_GEM))
 		drm_gem_open(dev, file);
@@ -238,7 +238,7 @@ void drm_file_free(struct drm_file *file)
 		     atomic_read(&dev->open_count));
 #else
 	drm_dbg_core(dev, "pid=%d, dev=0x%lx, open_count=%d\n",
-		     curproc->p_p->ps_pid, (long)&dev->dev,
+		     (int)curproc->p_pid, (long)&dev->dev,
 		     atomic_read(&dev->open_count));
 #endif
 

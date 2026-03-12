@@ -29,6 +29,22 @@
 #include <sys/param.h>
 #include <linux/iosys-map.h>
 
+#ifdef __sun
+/* illumos: OpenBSD bus_dma GEM helper stubs for Phase 1 compilation. */
+
+#include <drm/drm_gem_dma_helper.h>
+
+void drm_gem_dma_free_object(struct drm_gem_object *obj) {}
+int drm_gem_dma_dumb_create(struct drm_file *f, struct drm_device *d, struct drm_mode_create_dumb *a) { return -ENOMEM; }
+int drm_gem_dma_dumb_create_internal(struct drm_file *f, struct drm_device *d, struct drm_mode_create_dumb *a) { return -ENOMEM; }
+int drm_gem_dma_dumb_map_offset(struct drm_file *f, struct drm_device *d, uint32_t h, uint64_t *o) { return -ENOMEM; }
+struct drm_gem_dma_object *drm_gem_dma_create(struct drm_device *d, size_t s) { return NULL; }
+struct sg_table *drm_gem_dma_get_sg_table(struct drm_gem_object *obj) { return NULL; }
+int drm_gem_dma_vmap(struct drm_gem_object *obj, struct iosys_map *map) { return -ENOMEM; }
+int __drm_gem_dma_disabled;
+
+#else /* !__sun — OpenBSD implementation */
+
 #include <drm/drm_device.h>
 #include <drm/drm_gem_dma_helper.h>
 
@@ -265,3 +281,5 @@ drm_gem_dma_vmap(struct drm_gem_object *gem_obj, struct iosys_map *map)
 
 	return 0;
 }
+
+#endif /* !__sun */

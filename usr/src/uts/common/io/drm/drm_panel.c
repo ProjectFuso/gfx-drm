@@ -62,7 +62,7 @@ void drm_panel_init(struct drm_panel *panel, struct device *dev,
 
 	INIT_LIST_HEAD(&panel->list);
 	INIT_LIST_HEAD(&panel->followers);
-	rw_init(&panel->follower_lock, "dpflk");
+	drm_rw_init(&panel->follower_lock, "dpflk");
 	panel->dev = dev;
 	panel->funcs = funcs;
 	panel->connector_type = connector_type;

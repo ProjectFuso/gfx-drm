@@ -9,10 +9,11 @@
  * all CPUs.  On illumos there is no direct cross-call for WBINVD; use the
  * local instruction.  Full cross-CPU cache flush deferred to Phase 2.
  */
-static inline void
+static inline int
 wbinvd_on_all_cpus(void)
 {
 	__asm__ __volatile__("wbinvd" : : : "memory");
+	return 0;	/* always succeeds (no timeout on illumos) */
 }
 #endif /* __i386__ || __amd64__ */
 

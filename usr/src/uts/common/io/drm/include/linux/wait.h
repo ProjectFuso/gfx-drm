@@ -22,6 +22,14 @@
 #include <sys/mutex.h>
 #include <sys/condvar.h>
 #include <sys/thread.h>
+#include <sys/param.h>
+/* illumos: sys/param.h does not define uppercase MAX/MIN */
+#ifndef MAX
+#define MAX(a, b)	((a) > (b) ? (a) : (b))
+#endif
+#ifndef MIN
+#define MIN(a, b)	((a) < (b) ? (a) : (b))
+#endif
 
 #include <linux/list.h>
 #include <linux/errno.h>

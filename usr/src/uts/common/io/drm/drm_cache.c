@@ -36,6 +36,11 @@
 
 #include <drm/drm_cache.h>
 
+/* illumos: x86_clflush_size for cache line size */
+#ifndef __linux__
+#include <sys/x86_archext.h>
+#endif
+
 /* A small bounce buffer that fits on the stack. */
 #define MEMCPY_BOUNCE_SIZE 128
 
@@ -48,22 +53,22 @@
  * in the caller.
  */
 static void
-drm_clflush_page(struct vm_page *page)
+drm_clflush_page(page_t *page)
 {
 	uint8_t *page_virtual;
 	unsigned int i;
-	const int size = curcpu()->ci_cflushsz;
+	const int size = x86_clflush_size;
 
 	if (unlikely(page == NULL))
 		return;
 
-	page_virtual = kmap_atomic(page);
+	page_virtual = kmap_atomic((struct page *)(void *)page);
 	for (i = 0; i < PAGE_SIZE; i += size)
 		clflushopt(page_virtual + i);
 	kunmap_atomic(page_virtual);
 }
 
-static void drm_cache_flush_clflush(struct vm_page *pages[],
+static void drm_cache_flush_clflush(page_t *pages[],
 				    unsigned long num_pages)
 {
 	unsigned long i;
@@ -84,7 +89,7 @@ static void drm_cache_flush_clflush(struct vm_page *pages[],
  * to a page in the array.
  */
 void
-drm_clflush_pages(struct vm_page *pages[], unsigned long num_pages)
+drm_clflush_pages(page_t *pages[], unsigned long num_pages)
 {
 
 #if defined(CONFIG_X86)
@@ -100,13 +105,13 @@ drm_clflush_pages(struct vm_page *pages[], unsigned long num_pages)
 	unsigned long i;
 
 	for (i = 0; i < num_pages; i++) {
-		struct vm_page *page = pages[i];
+		page_t *page = pages[i];
 		void *page_virtual;
 
 		if (unlikely(page == NULL))
 			continue;
 
-		page_virtual = kmap_atomic(page);
+		page_virtual = kmap_atomic((struct page *)(void *)page);
 		flush_dcache_range((unsigned long)page_virtual,
 				   (unsigned long)page_virtual + PAGE_SIZE);
 		kunmap_atomic(page_virtual);
@@ -160,7 +165,7 @@ drm_clflush_virt_range(void *addr, unsigned long length)
 {
 #if defined(CONFIG_X86)
 	if (static_cpu_has(X86_FEATURE_CLFLUSH)) {
-		const int size = curcpu()->ci_cflushsz;
+		const int size = x86_clflush_size;
 		void *end = addr + length;
 
 		addr = (void *)(((unsigned long)addr) & -size);

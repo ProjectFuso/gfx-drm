@@ -4,6 +4,7 @@
 #define _LINUX_PLATFORM_DEVICE_H
 
 #include <linux/device.h>
+#include <sys/queue.h>		/* LIST_ENTRY */
 
 struct platform_driver;
 

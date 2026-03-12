@@ -28,10 +28,11 @@
 
 #include <sys/param.h>
 #include <sys/fcntl.h>
+#ifndef __sun
 #include <sys/specdev.h>
 #include <sys/vnode.h>
-
 #include <machine/bus.h>
+#endif /* !__sun */
 
 #ifdef __HAVE_ACPI
 #include <dev/acpi/acpidev.h>
@@ -92,7 +93,9 @@ DEFINE_STATIC_SRCU(drm_unplug_srcu);
  * Some functions are only called once on init regardless of how many times
  * drm attaches.  In linux this is handled via module_init()/module_exit()
  */
-int drm_refcnt; 
+#ifndef __sun	/* illumos: OpenBSD platform declarations */
+
+int drm_refcnt;
 
 struct drm_softc {
 	struct device		sc_dev;
@@ -130,6 +133,8 @@ SPLAY_PROTOTYPE(drm_file_tree, drm_file, link, drm_file_cmp);
 #define DRMDEVCF_PRIMARY	0
 #define drmdevcf_primary	cf_loc[DRMDEVCF_PRIMARY]	/* spec'd as primary? */
 #define DRMDEVCF_PRIMARY_UNK	-1
+
+#endif /* !__sun */
 
 /*
  * DRM Minors
@@ -210,10 +215,10 @@ static int drm_minor_alloc(struct drm_device *dev, enum drm_minor_type type)
 	minor->type = type;
 	minor->dev = dev;
 
-	r = xa_alloc(drm_minor_get_xa(type), &minor->index,
+	r = xa_alloc(drm_minor_get_xa(type), (u32 *)&minor->index,
 		     NULL, DRM_MINOR_LIMIT(type), GFP_KERNEL);
 	if (r == -EBUSY && (type == DRM_MINOR_PRIMARY || type == DRM_MINOR_RENDER))
-		r = xa_alloc(&drm_minors_xa, &minor->index,
+		r = xa_alloc(&drm_minors_xa, (u32 *)&minor->index,
 			     NULL, DRM_EXTENDED_MINOR_LIMIT, GFP_KERNEL);
 	if (r < 0)
 		return r;
@@ -1227,6 +1232,8 @@ module_init(drm_core_init);
 module_exit(drm_core_exit);
 #endif
 
+#ifndef __sun	/* illumos: OpenBSD platform attachment, not used on illumos */
+
 void drm_lastclose(struct drm_device *dev);
 
 void
@@ -1417,10 +1424,10 @@ drm_attach(struct device *parent, struct device *self, void *aux)
 
 	mtx_init(&dev->quiesce_mtx, IPL_NONE);
 	mtx_init(&dev->event_lock, IPL_TTY);
-	rw_init(&dev->struct_mutex, "drmdevlk");
-	rw_init(&dev->filelist_mutex, "drmflist");
-	rw_init(&dev->clientlist_mutex, "drmclist");
-	rw_init(&dev->master_mutex, "drmmast");
+	drm_rw_init(&dev->struct_mutex, "drmdevlk");
+	drm_rw_init(&dev->filelist_mutex, "drmflist");
+	drm_rw_init(&dev->clientlist_mutex, "drmclist");
+	drm_rw_init(&dev->master_mutex, "drmmast");
 
 	ret = drmm_add_action(dev, drm_dev_init_release, NULL);
 	if (ret)
@@ -1585,6 +1592,8 @@ struct cfdriver drm_cd = {
 	NULL, "drm", DV_DULL
 };
 
+#endif /* !__sun */
+
 const struct pci_device_id *
 drm_find_description(int vendor, int device, const struct pci_device_id *idlist)
 {
@@ -1600,6 +1609,8 @@ drm_find_description(int vendor, int device, const struct pci_device_id *idlist)
 	}
 	return NULL;
 }
+
+#ifndef __sun	/* illumos: OpenBSD character device interface, not used on illumos */
 
 int
 drm_file_cmp(struct drm_file *f1, struct drm_file *f2)
@@ -1935,6 +1946,10 @@ out:
 	return (gotone);
 }
 
+#endif /* !__sun */
+
+#ifndef __sun	/* illumos: OpenBSD DMA/mmap helpers, not used on illumos */
+
 paddr_t
 drmmmap(dev_t kdev, off_t offset, int prot)
 {
@@ -2001,6 +2016,8 @@ drm_dmamem_free(bus_dma_tag_t dmat, struct drm_dmamem *mem)
 	free(mem, M_DRM, 0);
 }
 
+#endif /* !__sun */
+
 /*
  * Compute order.  Can be made faster.
  */
@@ -2019,6 +2036,7 @@ drm_order(unsigned long size)
 	return order;
 }
 
+#ifndef __sun	/* illumos: OpenBSD pciinfo ioctl, uses OpenBSD pci_bus layout */
 int
 drm_getpciinfo(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
@@ -2039,3 +2057,4 @@ drm_getpciinfo(struct drm_device *dev, void *data, struct drm_file *file_priv)
 
 	return 0;
 }
+#endif /* !__sun */

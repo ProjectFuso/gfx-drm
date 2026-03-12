@@ -3,6 +3,8 @@
 #ifndef _LINUX_SHRINKER_H
 #define _LINUX_SHRINKER_H
 
+#include <sys/queue.h>		/* TAILQ_ENTRY */
+
 struct shrink_control {
 	u_long	nr_to_scan;
 	u_long	nr_scanned;

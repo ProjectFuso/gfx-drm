@@ -1122,7 +1122,7 @@ __drm_gpuvm_prepare_objects(struct drm_gpuvm *gpuvm,
 			    unsigned int num_fences)
 {
 	struct drm_gpuvm_bo *vm_bo;
-	LIST_HEAD(extobjs);
+	struct list_head extobjs = LIST_HEAD_INIT(extobjs);
 	int ret = 0;
 
 	for_each_vm_bo_in_list(gpuvm, extobj, &extobjs, vm_bo) {
@@ -1364,7 +1364,7 @@ __drm_gpuvm_validate(struct drm_gpuvm *gpuvm, struct drm_exec *exec)
 {
 	const struct drm_gpuvm_ops *ops = gpuvm->ops;
 	struct drm_gpuvm_bo *vm_bo;
-	LIST_HEAD(evict);
+	struct list_head evict = LIST_HEAD_INIT(evict);
 	int ret = 0;
 
 	for_each_vm_bo_in_list(gpuvm, evict, &evict, vm_bo) {

@@ -113,9 +113,11 @@ struct ttm_tt {
 	 */
 	enum ttm_caching caching;
 
+#ifndef __sun	/* OpenBSD bus_dma fields */
 	bus_dma_tag_t dmat;
 	bus_dmamap_t map;
 	bus_dma_segment_t *segs;
+#endif
 };
 
 /**

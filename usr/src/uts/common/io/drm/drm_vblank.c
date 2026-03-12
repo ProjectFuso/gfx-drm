@@ -485,9 +485,8 @@ out:
 	spin_unlock_irqrestore(&dev->vblank_time_lock, irqflags);
 }
 
-static void vblank_disable_fn(void *arg)
+static void vblank_disable_impl(struct drm_vblank_crtc *vblank)
 {
-	struct drm_vblank_crtc *vblank = arg;
 	struct drm_device *dev = vblank->dev;
 	unsigned int pipe = vblank->pipe;
 	unsigned long irqflags;
@@ -499,6 +498,21 @@ static void vblank_disable_fn(void *arg)
 	}
 	spin_unlock_irqrestore(&dev->vbl_lock, irqflags);
 }
+
+#if defined(__linux__) || defined(__sun)
+/* Linux/illumos: timer callback has struct timer_list * argument */
+static void vblank_disable_fn(struct timer_list *t)
+{
+	struct drm_vblank_crtc *vblank = from_timer(vblank, t, disable_timer);
+	vblank_disable_impl(vblank);
+}
+#else
+/* OpenBSD: timeout callback has void * argument */
+static void vblank_disable_fn(void *arg)
+{
+	vblank_disable_impl((struct drm_vblank_crtc *)arg);
+}
+#endif
 
 static void drm_vblank_init_release(struct drm_device *dev, void *ptr)
 {
@@ -543,12 +557,12 @@ int drm_vblank_init(struct drm_device *dev, unsigned int num_crtcs)
 		vblank->dev = dev;
 		vblank->pipe = i;
 		init_waitqueue_head(&vblank->queue);
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 		timer_setup(&vblank->disable_timer, vblank_disable_fn, 0);
 #else
 		timeout_set(&vblank->disable_timer, vblank_disable_fn, vblank);
 #endif
-		seqlock_init(&vblank->seqlock, IPL_TTY);
+		seqlock_init(&vblank->seqlock, 0 /* IPL_TTY not used on illumos */);
 
 		ret = drmm_add_action_or_reset(dev, drm_vblank_init_release,
 					       vblank);
@@ -1256,7 +1270,7 @@ void drm_vblank_put(struct drm_device *dev, unsigned int pipe)
 		if (!vblank_offdelay)
 			return;
 		else if (vblank_offdelay < 0)
-			vblank_disable_fn(vblank);
+			vblank_disable_impl(vblank);
 		else if (!vblank->config.disable_immediate)
 			mod_timer(&vblank->disable_timer,
 				  jiffies + ((vblank_offdelay * HZ) / 1000));
@@ -1979,7 +1993,7 @@ bool drm_handle_vblank(struct drm_device *dev, unsigned int pipe)
 	spin_unlock_irqrestore(&dev->event_lock, irqflags);
 
 	if (disable_irq)
-		vblank_disable_fn(vblank);
+		vblank_disable_impl(vblank);
 
 	return true;
 }

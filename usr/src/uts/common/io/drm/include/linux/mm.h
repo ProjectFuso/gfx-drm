@@ -11,6 +11,20 @@
  *   uvm/uvm_extern.h, uvm/uvm_glue.h, lib/libkern/libkern.h
  */
 
+/*
+ * illumos: PAGE_SIZE/PAGE_SHIFT are PAGESIZE/PAGESHIFT; PAGE_MASK derived.
+ * sys/param.h (included above) defines PAGESIZE and PAGESHIFT.
+ */
+#ifndef PAGE_SIZE
+#define PAGE_SIZE	PAGESIZE
+#endif
+#ifndef PAGE_SHIFT
+#define PAGE_SHIFT	PAGESHIFT
+#endif
+#ifndef PAGE_MASK
+#define PAGE_MASK	(~(PAGE_SIZE - 1UL))
+#endif
+
 #include <linux/slab.h>		/* kvmalloc / kvfree / kzalloc etc. */
 #include <linux/shrinker.h>
 #include <linux/overflow.h>
@@ -34,6 +48,14 @@
 #define PFN_UP(x)		(((x) + PAGE_SIZE-1) >> PAGE_SHIFT)
 #define PFN_DOWN(x)		((x) >> PAGE_SHIFT)
 #define PFN_PHYS(x)		((x) << PAGE_SHIFT)
+
+/*
+ * illumos: OpenBSD uses 'struct vm_page' where Linux uses 'struct page'.
+ * Since both are opaque in our Phase 1 compat layer, alias them.
+ */
+#ifdef __sun
+#define vm_page page
+#endif
 
 bool is_vmalloc_addr(const void *);
 

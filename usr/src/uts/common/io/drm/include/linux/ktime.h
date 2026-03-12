@@ -28,17 +28,14 @@ typedef int64_t ktime_t;
 static inline ktime_t
 ktime_get(void)
 {
-	struct timespec ts;
-	nanouptime(&ts);
-	return TIMESPEC_TO_NSEC(&ts);
+	/* illumos: gethrtime() returns nanoseconds since boot */
+	return (ktime_t)gethrtime();
 }
 
 static inline ktime_t
 ktime_get_raw(void)
 {
-	struct timespec ts;
-	nanouptime(&ts);
-	return TIMESPEC_TO_NSEC(&ts);
+	return (ktime_t)gethrtime();
 }
 
 static inline int64_t
@@ -165,10 +162,7 @@ ktime_divns(ktime_t a, int64_t ns)
 static inline ktime_t
 ktime_set(time_t s, long ns)
 {
-	struct timespec ts;
-	ts.tv_sec = s;
-	ts.tv_nsec = ns;
-	return TIMESPEC_TO_NSEC(&ts);
+	return (ktime_t)s * NSEC_PER_SEC + ns;
 }
 
 #include <linux/timekeeping.h>

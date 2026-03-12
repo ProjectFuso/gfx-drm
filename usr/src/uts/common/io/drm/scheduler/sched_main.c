@@ -508,7 +508,10 @@ unsigned long drm_sched_suspend_timeout(struct drm_gpu_scheduler *sched)
 
 #ifdef __linux__
 	sched_timeout = sched->work_tdr.timer.expires;
-#else
+#elif defined(__sun)
+	/* illumos Phase 1: callout_t has no exposed expiry; use 0 */
+	sched_timeout = 0;
+#else	/* OpenBSD */
 	sched_timeout = sched->work_tdr.to.to_time;
 #endif
 

@@ -30,7 +30,9 @@
 #ifndef _DRM_FILE_H_
 #define _DRM_FILE_H_
 
+#include <linux/ktime.h>
 #include <linux/types.h>
+#include <linux/pid.h>
 #include <linux/completion.h>
 #include <linux/idr.h>
 
@@ -279,7 +281,8 @@ struct drm_file {
 	 * Updates are guarded with dev->filelist_mutex and reference must be
 	 * dropped after a RCU grace period to accommodate lockless readers.
 	 */
-	struct pid __rcu *pid;
+	/* illumos: use drm_linux_pid to avoid conflict with illumos sys/proc.h struct pid */
+	struct drm_linux_pid __rcu *pid;
 
 	/** @client_id: A unique id for fdinfo */
 	u64 client_id;

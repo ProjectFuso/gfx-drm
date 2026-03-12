@@ -3,7 +3,10 @@
 #ifndef _LINUX_XARRAY_H
 #define _LINUX_XARRAY_H
 
+#include <sys/types.h>		/* kmutex_t, NULL */
+#include <sys/mutex.h>		/* mutex_enter, mutex_exit */
 #include <linux/gfp.h>
+#include <linux/errno.h>	/* ELAST */
 
 #include <sys/tree.h>
 

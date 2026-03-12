@@ -436,7 +436,7 @@ void drm_fb_helper_prepare(struct drm_device *dev, struct drm_fb_helper *helper,
 	INIT_WORK(&helper->resume_work, drm_fb_helper_resume_worker);
 	INIT_WORK(&helper->damage_work, drm_fb_helper_damage_work);
 	helper->damage_clip.x1 = helper->damage_clip.y1 = ~0;
-	rw_init(&helper->lock, "fbhlk");
+	drm_rw_init(&helper->lock, "fbhlk");
 	helper->funcs = funcs;
 	helper->dev = dev;
 	helper->preferred_bpp = preferred_bpp;

@@ -1,4 +1,8 @@
 /*	$OpenBSD: bitmap.h,v 1.9 2025/09/09 10:11:41 jsg Exp $	*/
+/* illumos: KASSERT is OpenBSD's assertion macro; map to illumos ASSERT */
+#ifndef KASSERT
+#define KASSERT(x) ASSERT(x)
+#endif
 /*
  * Copyright (c) 2013, 2014, 2015 Mark Kettenis
  *

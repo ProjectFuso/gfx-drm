@@ -26,6 +26,7 @@
 #ifndef _TTM_PAGE_POOL_H_
 #define _TTM_PAGE_POOL_H_
 
+#include <linux/list.h>
 #include <linux/mmzone.h>
 #include <linux/llist.h>
 #include <linux/spinlock.h>
@@ -38,8 +39,8 @@ struct ttm_pool;
 struct ttm_tt;
 
 struct ttm_pool_type_lru {
-	LIST_ENTRY(ttm_pool_type_lru) entries;
-	struct vm_page *pg;
+	struct list_head entries;	/* illumos: was LIST_ENTRY */
+	struct page *pg;		/* illumos: was struct vm_page */
 };
 
 /**
@@ -62,7 +63,7 @@ struct ttm_pool_type {
 
 	spinlock_t lock;
 	struct list_head pages;
-	LIST_HEAD(, ttm_pool_type_lru) lru;
+	struct list_head lru;		/* illumos: was LIST_HEAD(, ttm_pool_type_lru) */
 };
 
 /**

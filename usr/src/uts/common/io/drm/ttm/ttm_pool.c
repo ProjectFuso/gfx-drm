@@ -48,6 +48,32 @@
 
 #include "ttm_module.h"
 
+#ifdef __sun
+/* illumos Phase 1: stub out bus_dma-based TTM pool */
+int __ttm_pool_illumos_stub;
+
+int  ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+    struct ttm_operation_ctx *ctx) { (void)pool; (void)tt; (void)ctx; return -ENOMEM; }
+EXPORT_SYMBOL(ttm_pool_alloc);
+
+void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
+    { (void)pool; (void)tt; }
+EXPORT_SYMBOL(ttm_pool_free);
+
+void ttm_pool_init(struct ttm_pool *pool, struct device *dev,
+    int nid, bool use_dma_alloc, bool use_dma32)
+    { (void)pool; (void)dev; (void)nid; (void)use_dma_alloc; (void)use_dma32; }
+EXPORT_SYMBOL(ttm_pool_init);
+
+void ttm_pool_fini(struct ttm_pool *pool) { (void)pool; }
+EXPORT_SYMBOL(ttm_pool_fini);
+
+int  ttm_pool_debugfs(struct ttm_pool *pool, struct seq_file *m)
+    { (void)pool; (void)m; return 0; }
+EXPORT_SYMBOL(ttm_pool_debugfs);
+
+#else /* !__sun */
+
 /**
  * struct ttm_pool_dma - Helper object for coherent DMA mappings
  *
@@ -1000,3 +1026,5 @@ void ttm_pool_mgr_fini(void)
 	shrinker_free(mm_shrinker);
 	WARN_ON(!list_empty(&shrinker_list));
 }
+
+#endif /* \!__sun */

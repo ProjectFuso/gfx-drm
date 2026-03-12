@@ -6,6 +6,8 @@
 #include <linux/ref_tracker.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_DRM_DISPLAY_DP_TUNNEL
+
 #include <drm/drm_atomic_state_helper.h>
 
 #include <drm/drm_atomic.h>
@@ -1948,3 +1950,7 @@ void drm_dp_tunnel_mgr_destroy(struct drm_dp_tunnel_mgr *mgr)
 	destroy_mgr(mgr);
 }
 EXPORT_SYMBOL(drm_dp_tunnel_mgr_destroy);
+
+/* illumos: guarded by CONFIG_DRM_DISPLAY_DP_TUNNEL */
+#endif /* CONFIG_DRM_DISPLAY_DP_TUNNEL */
+int __drm_dp_tunnel_illumos_stub;

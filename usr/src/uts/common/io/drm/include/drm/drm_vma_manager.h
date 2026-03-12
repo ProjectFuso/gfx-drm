@@ -217,7 +217,7 @@ static inline __u64 drm_vma_node_offset_addr(struct drm_vma_offset_node *node)
  * This call is unlocked. The caller must guarantee that drm_vma_offset_remove()
  * is not called on this node concurrently.
  */
-#ifdef __linux__
+#if defined(__linux__)
 static inline void drm_vma_node_unmap(struct drm_vma_offset_node *node,
 				      struct address_space *file_mapping)
 {
@@ -225,6 +225,13 @@ static inline void drm_vma_node_unmap(struct drm_vma_offset_node *node,
 		unmap_mapping_range(file_mapping,
 				    drm_vma_node_offset_addr(node),
 				    drm_vma_node_size(node) << PAGE_SHIFT, 1);
+}
+#elif defined(__sun)
+struct address_space;
+static inline void drm_vma_node_unmap(struct drm_vma_offset_node *node,
+				      struct address_space *file_mapping)
+{
+	(void)node; (void)file_mapping;
 }
 #endif
 

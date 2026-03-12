@@ -39,6 +39,9 @@
 #include <linux/dma-resv.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#ifndef __linux__
+#include <uvm/uvm_extern.h>	/* vm_prot_t, voff_t, vsize_t, struct uvm_object */
+#endif
 
 #include <drm/drm_vma_manager.h>
 
@@ -188,7 +191,7 @@ struct drm_gem_object_funcs {
 	int (*mmap)(struct drm_gem_object *obj, struct vm_area_struct *vma);
 #else
 	int (*mmap)(struct drm_gem_object *, vm_prot_t, voff_t, vsize_t);
-#endif
+#endif /* __linux__ vs OpenBSD */
 
 	/**
 	 * @evict:
@@ -502,8 +505,6 @@ void drm_gem_vm_close(struct vm_area_struct *vma);
 int drm_gem_mmap_obj(struct drm_gem_object *obj, unsigned long obj_size,
 		     struct vm_area_struct *vma);
 int drm_gem_mmap(struct file *filp, struct vm_area_struct *vma);
-#else
-struct uvm_object *drm_gem_mmap(struct file *, vm_prot_t, voff_t, vsize_t);
 #endif
 
 /**

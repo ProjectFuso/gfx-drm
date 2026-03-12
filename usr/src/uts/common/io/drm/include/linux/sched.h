@@ -20,12 +20,15 @@
 #include <linux/hrtimer.h>
 #include <linux/sem.h>
 #include <linux/mutex.h>
+#include <asm/current.h>
 
 /*
  * Task state constants.  On illumos these are just hints; we don't
  * actually manipulate per-thread state bits the way Linux does.
  */
+#ifndef TASK_NORMAL
 #define TASK_NORMAL		1
+#endif
 #define TASK_UNINTERRUPTIBLE	0
 #define TASK_INTERRUPTIBLE	1	/* signals allowed (hint only) */
 #define TASK_RUNNING		-1
@@ -89,6 +92,6 @@ long schedule_timeout_uninterruptible(long);
 #define io_schedule_timeout(x)	schedule_timeout(x)
 
 /* wake_up_process: no-op in our cv-based implementation */
-int wake_up_process(kthread_t *t);
+int wake_up_process(struct task_struct *t);
 
 #endif /* _LINUX_SCHED_H */

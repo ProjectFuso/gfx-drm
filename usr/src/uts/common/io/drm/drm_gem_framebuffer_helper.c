@@ -1,5 +1,6 @@
 /* Public domain. */
 
+#include <linux/slab.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_modeset_helper.h>
@@ -12,7 +13,7 @@ drm_gem_fb_destroy(struct drm_framebuffer *fb)
 	for (i = 0; i < 4; i++)
 		drm_gem_object_put(fb->obj[i]);
 	drm_framebuffer_cleanup(fb);
-	free(fb, M_DRM, 0);
+	kfree(fb);
 }
 
 int
@@ -46,7 +47,11 @@ drm_gem_fb_create(struct drm_device *dev, struct drm_file *file,
 	if (gem_obj == NULL)
 		return ERR_PTR(-ENOENT);
 
-	fb = malloc(sizeof(*fb), M_DRM, M_ZERO | M_WAITOK);
+	fb = kzalloc(sizeof(*fb), GFP_KERNEL);
+	if (!fb) {
+		drm_gem_object_put(gem_obj);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	drm_helper_mode_fill_fb_struct(dev, fb, cmd);
 	fb->obj[0] = gem_obj;
@@ -59,7 +64,7 @@ drm_gem_fb_create(struct drm_device *dev, struct drm_file *file,
 
 dealloc:
 	drm_framebuffer_cleanup(fb);
-	free(fb, M_DRM, sizeof(*fb));
+	kfree(fb);
 	drm_gem_object_put(gem_obj);
 
 	return ERR_PTR(error);
@@ -68,7 +73,7 @@ dealloc:
 struct drm_gem_object *
 drm_gem_fb_get_obj(struct drm_framebuffer *fb, unsigned int plane)
 {
-	if (plane < nitems(fb->obj))
+	if (plane < ARRAY_SIZE(fb->obj))
 		return fb->obj[plane];
 	return NULL;
 }

@@ -362,7 +362,7 @@ void ttm_resource_free(struct ttm_buffer_object *bo, struct ttm_resource **res)
 	ttm_resource_del_bulk_move(*res, bo);
 	spin_unlock(&bo->bdev->lru_lock);
 	man = ttm_manager_type(bo->bdev, (*res)->mem_type);
-	man->func->free(man, *res);
+	(man->func->free)(man, *res); /* parens prevent macro expansion of 'free' */
 	*res = NULL;
 }
 EXPORT_SYMBOL(ttm_resource_free);
@@ -791,11 +791,11 @@ ttm_kmap_iter_linear_io_init(struct ttm_kmap_iter_linear_io *iter_io,
 		iter_io->needs_unmap = true;
 		memset(&iter_io->dmap, 0, sizeof(iter_io->dmap));
 		if (mem->bus.caching == ttm_write_combined) {
-#ifdef __linux__
+#if defined(__linux__)
 			iosys_map_set_vaddr_iomem(&iter_io->dmap,
 						  ioremap_wc(mem->bus.offset,
 							     mem->size));
-#else
+#elif !defined(__sun)	/* OpenBSD */
 			if (bus_space_map(bdev->memt, mem->bus.offset,
 			    mem->size, BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_PREFETCHABLE,
 			    &iter_io->dmap.bsh)) {
@@ -807,19 +807,19 @@ ttm_kmap_iter_linear_io_init(struct ttm_kmap_iter_linear_io *iter_io,
 			    bus_space_vaddr(bdev->memt, iter_io->dmap.bsh));
 #endif
 		} else if (mem->bus.caching == ttm_cached) {
-#ifdef __linux__
+#if defined(__linux__)
 			iosys_map_set_vaddr(&iter_io->dmap,
 					    memremap(mem->bus.offset, mem->size,
 						     MEMREMAP_WB |
 						     MEMREMAP_WT |
 						     MEMREMAP_WC));
-#else
+#elif !defined(__sun)	/* OpenBSD */
 			if (bus_space_map(bdev->memt, mem->bus.offset,
 			    mem->size, BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_PREFETCHABLE,
 			    &iter_io->dmap.bsh)) {
 				ret = -ENOMEM;
 				goto out_io_free;
-			}   
+			}
 			iter_io->dmap.size = mem->size;
 			iosys_map_set_vaddr(&iter_io->dmap,
 			    bus_space_vaddr(bdev->memt, iter_io->dmap.bsh));
@@ -828,19 +828,19 @@ ttm_kmap_iter_linear_io_init(struct ttm_kmap_iter_linear_io *iter_io,
 
 		/* If uncached requested or if mapping cached or wc failed */
 		if (iosys_map_is_null(&iter_io->dmap)) {
-#ifdef __linux__
+#if defined(__linux__)
 			iosys_map_set_vaddr_iomem(&iter_io->dmap,
 						  ioremap(mem->bus.offset,
 							  mem->size));
-#else
-		if (bus_space_map(bdev->memt, mem->bus.offset,
-		    mem->size, BUS_SPACE_MAP_LINEAR, &iter_io->dmap.bsh)) {
-			ret = -ENOMEM;
-			goto out_io_free;
-		}
-		iter_io->dmap.size = mem->size;
-		iosys_map_set_vaddr_iomem(&iter_io->dmap,
-		    bus_space_vaddr(bdev->memt, iter_io->dmap.bsh));
+#elif !defined(__sun)	/* OpenBSD */
+			if (bus_space_map(bdev->memt, mem->bus.offset,
+			    mem->size, BUS_SPACE_MAP_LINEAR, &iter_io->dmap.bsh)) {
+				ret = -ENOMEM;
+				goto out_io_free;
+			}
+			iter_io->dmap.size = mem->size;
+			iosys_map_set_vaddr_iomem(&iter_io->dmap,
+			    bus_space_vaddr(bdev->memt, iter_io->dmap.bsh));
 #endif
 		}
 
@@ -874,12 +874,12 @@ ttm_kmap_iter_linear_io_fini(struct ttm_kmap_iter_linear_io *iter_io,
 			     struct ttm_resource *mem)
 {
 	if (iter_io->needs_unmap && iosys_map_is_set(&iter_io->dmap)) {
-#ifdef __linux__
+#if defined(__linux__)
 		if (iter_io->dmap.is_iomem)
 			iounmap(iter_io->dmap.vaddr_iomem);
 		else
 			memunmap(iter_io->dmap.vaddr);
-#else
+#elif !defined(__sun)	/* OpenBSD */
 		bus_space_unmap(bdev->memt, iter_io->dmap.bsh,
 		    iter_io->dmap.size);
 #endif

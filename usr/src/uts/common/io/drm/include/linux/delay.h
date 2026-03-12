@@ -7,6 +7,7 @@
 #include <sys/sunddi.h>
 #include <sys/mutex.h>
 #include <sys/condvar.h>
+#include <sys/sysmacros.h>	/* MAX() */
 
 static inline void
 udelay(unsigned long usecs)

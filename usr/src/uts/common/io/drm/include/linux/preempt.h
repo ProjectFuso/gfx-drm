@@ -3,8 +3,8 @@
 #ifndef _LINUX_PREEMPT_H
 #define _LINUX_PREEMPT_H
 
+#include <stdbool.h>
 #include <asm/preempt.h>
-#include <sys/param.h> /* for curcpu in machine/cpu.h */
 
 static inline void
 preempt_enable(void)
@@ -29,7 +29,8 @@ migrate_disable(void)
 static inline bool
 in_irq(void)
 {
-	return (curcpu()->ci_idepth > 0);
+	/* illumos: DRM does not run from interrupt context */
+	return false;
 }
 
 static inline bool

@@ -26,7 +26,9 @@
 #define swap(a, b) \
 	do { __typeof(a) __tmp = (a); (a) = (b); (b) = __tmp; } while(0)
 
-#define ARRAY_SIZE nitems
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
 
 #define scnprintf(str, size, fmt, arg...) snprintf(str, size, fmt, ## arg)
 
@@ -47,12 +49,25 @@
 #define clamp(x, a, b) clamp_t(__typeof(x), x, a, b)
 #define clamp_val(x, a, b) clamp_t(__typeof(x), x, a, b)
 
+/* illumos sys/ddi.h defines min/max; guard against redefinition */
+#ifndef min
 #define min(a, b) MIN(a, b)
+#endif
+#ifndef max
 #define max(a, b) MAX(a, b)
+#endif
 #define min3(x, y, z) MIN(x, MIN(y, z))
 #define max3(x, y, z) MAX(x, MAX(y, z))
 
 #define min_not_zero(a, b) (a == 0) ? b : ((b == 0) ? a : min(a, b))
+
+#ifndef abs
+/* Use __builtin_abs/__builtin_labs to avoid type-limits warning on unsigned */
+static __inline__ int  __drm_abs_int(int x)  { return x < 0 ? -x : x; }
+static __inline__ long __drm_abs_long(long x) { return x < 0 ? -x : x; }
+#define abs(x) __builtin_choose_expr(sizeof(x) > sizeof(int), \
+    __drm_abs_long((long)(x)), __drm_abs_int((int)(x)))
+#endif
 
 static inline char *
 kvasprintf(int flags, const char *fmt, va_list ap)

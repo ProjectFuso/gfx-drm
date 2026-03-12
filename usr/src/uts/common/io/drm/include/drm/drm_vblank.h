@@ -26,6 +26,12 @@
 
 #include <linux/seqlock.h>
 #include <linux/idr.h>
+#ifdef __linux__
+/* Linux uses struct timer_list */
+#elif !defined(__sun)
+#include <sys/timeout.h>	/* struct timeout for disable_timer (OpenBSD) */
+#endif
+#include <linux/timer.h>	/* struct timer_list for illumos */
 #include <linux/poll.h>
 #include <linux/kthread.h>
 
@@ -128,7 +134,11 @@ struct drm_vblank_crtc {
 	 * &drm_vblank_crtc_config.offdelay_ms and the setting of the
 	 * &drm_device.max_vblank_count value.
 	 */
-	struct timeout disable_timer;
+#if !defined(__linux__) && !defined(__sun)
+	struct timeout disable_timer;	/* OpenBSD */
+#else
+	struct timer_list disable_timer;	/* Linux / illumos */
+#endif
 
 	/**
 	 * @seqlock: Protect vblank count and time.

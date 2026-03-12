@@ -5,9 +5,10 @@
 
 #include <sys/types.h>
 #include <sys/systm.h>
-#include <sys/stdarg.h>
+#include <stdarg.h>	/* illumos: stdarg.h, not sys/stdarg.h */
 
 #include <linux/init.h>
+#include <linux/types.h>
 
 #define KERN_CRIT	"\0012"
 #define KERN_ERR	"\0013"

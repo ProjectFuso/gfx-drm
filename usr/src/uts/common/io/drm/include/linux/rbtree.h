@@ -30,6 +30,7 @@
 #define	_LINUX_RBTREE_H_
 
 #include <sys/tree.h>
+#include <linux/types.h>
 
 struct rb_node {
 	RB_ENTRY(rb_node)	__entry;

@@ -107,8 +107,8 @@ static struct dma_resv_list *dma_resv_list_alloc(unsigned int max_fences)
 	list->max_fences = (ksize(list) - offsetof(typeof(*list), table)) /
 		sizeof(*list->table);
 #else
-	list->max_fences = (offsetof(typeof(*list), table[max_fences]) -
-	    offsetof(typeof(*list), table)) / sizeof(*list->table);
+	list->max_fences = (offsetof(struct dma_resv_list, table[max_fences]) -
+	    offsetof(struct dma_resv_list, table)) / sizeof(*list->table);
 #endif
 
 	return list;

@@ -92,4 +92,15 @@ int acpi_target_system_state(void);
 /* illumos: acpi_gbl_FADT stubbed — OpenBSD struct acpi_fadt not available */
 #define ACPI_FADT_LOW_POWER_S0		(1 << 21)
 
+enum acpi_backlight_type {
+	acpi_backlight_undef = -1,
+	acpi_backlight_none = 0,
+	acpi_backlight_video,
+	acpi_backlight_vendor,
+	acpi_backlight_native,
+	acpi_backlight_apple_gmux,
+};
+
+enum acpi_backlight_type acpi_video_get_backlight_type(void);
+
 #endif

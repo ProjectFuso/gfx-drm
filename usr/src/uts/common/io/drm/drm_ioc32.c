@@ -31,6 +31,23 @@
 #include <linux/ratelimit.h>
 #include <linux/export.h>
 
+#ifdef __sun
+/*
+ * illumos Phase 1: 32-bit compat ioctls use _SYSCALL32 DDI, not Linux VFS.
+ * Stub drm_compat_ioctl and skip the Linux-specific body.
+ */
+#include <drm/drm_ioctl.h>
+long
+drm_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	return -ENOTTY;
+}
+EXPORT_SYMBOL(drm_compat_ioctl);
+
+int __drm_ioc32_illumos_stub;
+
+#else /* !__sun */
+
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
 #include <drm/drm_print.h>
@@ -389,3 +406,5 @@ long drm_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	return ret;
 }
 EXPORT_SYMBOL(drm_compat_ioctl);
+
+#endif /* !__sun */

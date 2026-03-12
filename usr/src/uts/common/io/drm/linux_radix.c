@@ -29,11 +29,13 @@
 
 /* $FreeBSD: head/sys/compat/linuxkpi/common/src/linux_radix.c 334483 2018-06-01 11:42:09Z hselasky $ */
 
+/*
+ * illumos: Replace FreeBSD-specific headers with illumos equivalents.
+ * malloc/free/M_* come from linux/slab.h (BSD compat macros).
+ */
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/kernel.h>
-#include <sys/sysctl.h>
+#include <linux/slab.h>		/* illumos: provides malloc/free/M_DRM/M_* */
 
 #include <linux/radix-tree.h>
 

@@ -5,8 +5,14 @@
 
 #include <sys/errno.h>
 #include <linux/compiler.h>
+#include <stdbool.h>
 
-#define IS_ERR_VALUE(x) unlikely((x) >= (unsigned long)-ELAST)
+/* illumos has no ELAST; use Linux's MAX_ERRNO (4095) as the error range */
+#ifndef ELAST
+#define ELAST	4095
+#endif
+
+#define IS_ERR_VALUE(x) unlikely((x) >= (unsigned long)-(long)ELAST)
 
 static inline void *
 ERR_PTR(long error)

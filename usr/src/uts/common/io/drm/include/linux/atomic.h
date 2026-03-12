@@ -35,6 +35,7 @@
 
 #include <sys/types.h>
 #include <sys/mutex.h>
+#include <sys/atomic.h>		/* atomic_and_uint, atomic_or_uint, membar_* */
 #include <linux/types.h>
 #include <linux/compiler.h>	/* via x86/include/asm/atomic.h */
 
@@ -398,6 +399,15 @@ find_next_bit(const volatile void *p, int max, int b)
 	for ((b) = find_first_zero_bit((p), (max));		\
 	     (b) < (max);					\
 	     (b) = find_next_zero_bit((p), (max), (b) + 1))
+
+/*
+ * illumos: __membar is an OpenBSD intrinsic; provide a GCC equivalent.
+ * An empty string emits a compiler barrier; "lfence"/"sfence"/"mfence"
+ * emit the respective x86 fence instructions.
+ */
+#ifndef __membar
+#define __membar(x)	__asm volatile(x ::: "memory")
+#endif
 
 #if defined(__i386__)
 #define rmb()	__asm volatile("lock; addl $0,-4(%%esp)" : : : "memory", "cc")

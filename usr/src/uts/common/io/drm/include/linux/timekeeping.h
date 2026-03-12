@@ -6,15 +6,17 @@
 static inline time_t
 ktime_get_real_seconds(void)
 {
-	return gettime();
+	/* illumos: gethrestime_sec() returns current wall-clock time in seconds */
+	return gethrestime_sec();
 }
 
 static inline ktime_t
 ktime_get_real(void)
 {
-	struct timespec ts;
-	nanotime(&ts);
-	return TIMESPEC_TO_NSEC(&ts);
+	/* illumos: gethrestime() fills a timespec with wall-clock time */
+	timespec_t ts;
+	gethrestime(&ts);
+	return (ktime_t)ts.tv_sec * NSEC_PER_SEC + ts.tv_nsec;
 }
 
 static inline uint64_t

@@ -62,7 +62,9 @@ struct pci_dev;
 /*
  * PCI class / subclass codes — standard PCI spec values
  */
+#ifndef PCI_CLASS_DISPLAY
 #define PCI_CLASS_DISPLAY		0x03
+#endif
 #define PCI_SUBCLASS_DISPLAY_VGA	0x00
 #define PCI_SUBCLASS_DISPLAY_MISC	0x80
 #define PCI_CLASS_ACCELERATOR		0x12	/* Processing Accelerator */
@@ -97,8 +99,22 @@ struct pci_dev;
 #ifndef PCI_CAP_ID_PCI_E
 #define PCI_CAP_ID_PCI_E	0x10
 #endif
-/* Alias for callers that use Linux naming */
+/* Alias for callers that use Linux/BSD naming */
 #define PCI_CAP_PCIEXPRESS	PCI_CAP_ID_PCI_E
+#define PCI_CAP_ID_EXP		PCI_CAP_ID_PCI_E
+
+/*
+ * PCIe capability register offsets (relative to PCIe cap base)
+ * BSD naming (PCI_PCIE_*) — used by drm_linux.c
+ */
+#define PCI_PCIE_XCAP		0x00	/* cap header: version/type/port */
+#define PCI_PCIE_XCAP_VER(x)	((x) & 0xf)	/* extract version field */
+#define PCI_PCIE_LCAP		0x0c	/* link capabilities */
+#define PCI_PCIE_LCAP2		0x2c	/* link capabilities 2 */
+#define PCI_PCIE_LCSR		0x10	/* link control/status */
+#define PCI_PCIE_LCSR_ASPM_L0S	0x0001	/* ASPM L0s enable */
+#define PCI_PCIE_LCSR_ASPM_L1	0x0002	/* ASPM L1 enable */
+#define PCI_PCIE_ECAP		0x100	/* extended capability base offset */
 
 /*
  * PCI_EXP_* aliases — map to our PCI_PCIE_* names

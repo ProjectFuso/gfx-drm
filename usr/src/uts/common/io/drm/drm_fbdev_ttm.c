@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#ifdef CONFIG_DRM_FBDEV_EMULATION
 
 #include <linux/moduleparam.h>
 #include <linux/vmalloc.h>
@@ -370,3 +371,6 @@ err_drm_client_init:
 	return;
 }
 EXPORT_SYMBOL(drm_fbdev_ttm_setup);
+#else
+int __drm_fbdev_ttm_disabled;
+#endif /* CONFIG_DRM_FBDEV_EMULATION */

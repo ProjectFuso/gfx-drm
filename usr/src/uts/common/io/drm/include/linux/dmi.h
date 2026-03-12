@@ -4,6 +4,7 @@
 #define _LINUX_DMI_H
 
 #include <sys/types.h>
+#include <linux/types.h>
 #include <linux/mod_devicetable.h>
 
 int dmi_check_system(const struct dmi_system_id *);

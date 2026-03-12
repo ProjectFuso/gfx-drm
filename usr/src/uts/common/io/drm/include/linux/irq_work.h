@@ -12,7 +12,7 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/taskq.h>
+#include <sys/taskq_impl.h>	/* taskq_ent_t, taskq_dispatch_ent */
 
 #include <linux/llist.h>
 
@@ -40,7 +40,7 @@ init_irq_work(struct irq_work *work, irq_work_func_t func)
 {
 	work->tq = (taskq_t *)system_wq;
 	work->func = func;
-	taskq_init_ent(&work->task);
+	bzero(&work->task, sizeof(work->task));
 }
 
 static inline bool

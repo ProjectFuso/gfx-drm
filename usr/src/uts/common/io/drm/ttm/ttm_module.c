@@ -65,14 +65,14 @@ pgprot_t ttm_prot_from_caching(enum ttm_caching caching, pgprot_t tmp)
 	if (caching == ttm_cached)
 		return tmp;
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined(__amd64__)
 	if (caching == ttm_write_combined)
 		tmp = pgprot_writecombine(tmp);
 #ifndef CONFIG_UML
-	else if (curcpu()->ci_family > 3)
+	else
 		tmp = pgprot_noncached(tmp);
 #endif /* CONFIG_UML */
-#endif /* __i386__ || __x86_64__ */
+#endif /* __i386__ || __x86_64__ || __amd64__ */
 #if defined(__ia64__) || defined(__arm__) || defined(__aarch64__) || \
 	defined(__powerpc__) || defined(__mips__) || defined(__loongarch__)
 	if (caching == ttm_write_combined)

@@ -2094,8 +2094,12 @@ void drm_dp_aux_init(struct drm_dp_aux *aux)
 	 * witness does not understand mutex_lock_nest_lock()
 	 * order reversal in i915 with this lock
 	 */
+#ifdef __sun
+	mutex_init(&aux->hw_mutex, "drmdp", MUTEX_DRIVER, NULL);
+#else
 	rw_init_flags(&aux->hw_mutex, "drmdp", RWL_NOWITNESS);
-	rw_init(&aux->cec.lock, "drmcec");
+#endif
+	drm_rw_init(&aux->cec.lock, "drmcec");
 	INIT_WORK(&aux->crc_work, drm_dp_aux_crc_work);
 
 	aux->ddc.algo = &drm_dp_i2c_algo;
@@ -2150,13 +2154,17 @@ int drm_dp_aux_register(struct drm_dp_aux *aux)
 	strscpy(aux->ddc.name, aux->name ? aux->name : dev_name(aux->dev),
 		sizeof(aux->ddc.name));
 
+#ifndef __sun
 	ret = drm_dp_aux_register_devnode(aux);
 	if (ret)
 		return ret;
+#endif
 
 	ret = i2c_add_adapter(&aux->ddc);
 	if (ret) {
+#ifndef __sun
 		drm_dp_aux_unregister_devnode(aux);
+#endif
 		return ret;
 	}
 
@@ -2170,7 +2178,9 @@ EXPORT_SYMBOL(drm_dp_aux_register);
  */
 void drm_dp_aux_unregister(struct drm_dp_aux *aux)
 {
+#ifndef __sun
 	drm_dp_aux_unregister_devnode(aux);
+#endif
 	i2c_del_adapter(&aux->ddc);
 }
 EXPORT_SYMBOL(drm_dp_aux_unregister);

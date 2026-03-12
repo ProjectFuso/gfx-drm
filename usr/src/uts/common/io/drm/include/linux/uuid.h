@@ -4,6 +4,7 @@
 #define _LINUX_UUID_H
 
 #include <linux/string.h>
+#include <sys/random.h>		/* random_get_pseudo_bytes */
 
 #define UUID_STRING_LEN 36
 #define UUID_SIZE	16
@@ -45,7 +46,7 @@ guid_is_null(const guid_t *a)
 static inline void
 guid_gen(guid_t *a)
 {
-	arc4random_buf(&a->guid, sizeof(a->guid));
+	(void)random_get_pseudo_bytes((uint8_t *)&a->guid, sizeof(a->guid));
 	a->guid[6] = (a->guid[6] & 0x0f) | 0x40;
 	a->guid[8] = (a->guid[8] & 0x3f) | 0x80;
 }

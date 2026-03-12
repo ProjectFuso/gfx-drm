@@ -71,7 +71,7 @@ int drm_sched_entity_init(struct drm_sched_entity *entity,
 	entity->guilty = guilty;
 	entity->num_sched_list = num_sched_list;
 	entity->priority = priority;
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	entity->last_user = current->group_leader;
 #else
 	entity->last_user = curproc->p_p;
@@ -300,7 +300,7 @@ static void drm_sched_entity_kill(struct drm_sched_entity *entity)
 long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 {
 	struct drm_gpu_scheduler *sched;
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	struct task_struct *last_user;
 #else
 	struct process *last_user, *curpr;
@@ -315,7 +315,7 @@ long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 	 * The client will not queue more IBs during this fini, consume existing
 	 * queued IBs or discard them on SIGKILL
 	 */
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	if (current->flags & PF_EXITING) {
 #else
 	curpr = curproc->p_p;
@@ -332,7 +332,7 @@ long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout)
 	}
 
 	/* For killed process disable any more IBs enqueue right now */
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	last_user = cmpxchg(&entity->last_user, current->group_leader, NULL);
 	if (last_user == current->group_leader &&
 	    (current->flags & PF_EXITING) && (current->exit_code == SIGKILL))
@@ -608,7 +608,7 @@ void drm_sched_entity_push_job(struct drm_sched_job *sched_job)
 
 	trace_drm_sched_job(sched_job, entity);
 	atomic_inc(entity->rq->sched->score);
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	WRITE_ONCE(entity->last_user, current->group_leader);
 #else
 	WRITE_ONCE(entity->last_user, curproc->p_p);

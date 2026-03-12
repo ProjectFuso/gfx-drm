@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/thread.h>
 #include <sys/taskq.h>
+#include <linux/types.h>
 
 struct kthread_work {
 	taskqid_t	 id;
@@ -33,10 +34,10 @@ bool kthread_cancel_work_sync(struct kthread_work *work);
 void kthread_flush_work(struct kthread_work *work);
 void kthread_flush_worker(struct kthread_worker *worker);
 
-/* park/unpark - stub */
-static inline void kthread_park(kthread_t *t) {}
-static inline void kthread_unpark(kthread_t *t) {}
-static inline int  kthread_should_park(void) { return 0; }
-static inline void kthread_parkme(void) {}
+/* park/unpark - implemented in drm_linux.c */
+void kthread_park(kthread_t *t);
+void kthread_unpark(kthread_t *t);
+int  kthread_should_park(void);
+void kthread_parkme(void);
 
 #endif

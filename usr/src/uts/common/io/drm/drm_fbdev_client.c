@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#ifdef CONFIG_DRM_FBDEV_EMULATION
 
 #include <drm/drm_client.h>
 #include <drm/drm_crtc_helper.h>
@@ -139,3 +140,7 @@ err_drm_client_init:
 	return ret;
 }
 EXPORT_SYMBOL(drm_fbdev_client_setup);
+#else
+/* illumos: fbdev emulation disabled; dummy symbol to satisfy ctfconvert */
+int __drm_fbdev_client_disabled;
+#endif /* CONFIG_DRM_FBDEV_EMULATION */

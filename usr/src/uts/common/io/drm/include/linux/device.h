@@ -85,7 +85,7 @@ devm_device_add_group(struct device *dev, const struct attribute_group *g)
 	WARN_ONCE(cond, "drm: " fmt, ##__VA_ARGS__)
 #define dev_err_once		dev_err
 #define dev_err_probe(dev, err, fmt, ...) \
-	(cmn_err(CE_WARN, "!drm: " fmt, ##__VA_ARGS__), err)
+	({ cmn_err(CE_WARN, "!drm: " fmt, ##__VA_ARGS__); (err); })
 
 #ifdef DRMDEBUG
 

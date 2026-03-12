@@ -71,6 +71,7 @@
 #include <linux/highmem.h>
 #include <linux/vmalloc.h>
 #include <linux/component.h>
+#include <linux/iommu.h>
 
 #include <drm/drm_device.h>
 #include <drm/drm_connector.h>
@@ -192,9 +193,10 @@ schedule_timeout_uninterruptible(long timeout)
 }
 
 int
-wake_up_process(kthread_t *t)
+wake_up_process(struct task_struct *t)
 {
 	/* cv_broadcast in wake_up() already handles waking; no-op here */
+	(void)t;
 	return 1;
 }
 
@@ -527,7 +529,7 @@ dmi_found(const struct dmi_system_id *dsi)
 {
 	int i, slot;
 
-	for (i = 0; i < nitems(dsi->matches); i++) {
+	for (i = 0; i < ARRAY_SIZE(dsi->matches); i++) {
 		slot = dsi->matches[i].slot;
 		if (slot == DMI_NONE)
 			break;
@@ -1254,34 +1256,6 @@ dev_get_drvdata(struct device *dev)
 	}
 	mutex_exit(&drvdata_lock);
 	return NULL;
-}
-
-/* ===== DRM sysfs hotplug (Phase 1 stubs) ===== */
-
-void
-drm_sysfs_hotplug_event(struct drm_device *dev)
-{
-	/* Phase 1: stub; wire to pollwakeup() in later phase */
-}
-
-void
-drm_sysfs_connector_hotplug_event(struct drm_connector *connector)
-{
-	/* Phase 1: stub */
-}
-
-void
-drm_sysfs_connector_status_event(struct drm_connector *connector,
-    struct drm_property *property)
-{
-	/* Phase 1: stub */
-}
-
-void
-drm_sysfs_connector_property_event(struct drm_connector *connector,
-    struct drm_property *property)
-{
-	/* Phase 1: stub */
 }
 
 /* ===== DMA fence ===== */
@@ -2447,10 +2421,10 @@ atomic_dec_and_mutex_lock(volatile int *v, struct mutex *lock)
 	if (atomic_add_unless(v, -1, 1))
 		return 0;
 
-	rw_enter(&lock->rw, RW_WRITER);
+	mutex_enter(lock);
 	if (atomic_dec_return(v) == 0)
 		return 1;
-	rw_exit(&lock->rw);
+	mutex_exit(lock);
 	return 0;
 }
 
@@ -2889,9 +2863,9 @@ drm_linux_init(void)
 
 	/* IDR and XArray caches */
 	idr_cache = kmem_cache_create("idr_entry", sizeof(struct idr_entry),
-	    0, NULL, NULL, NULL, NULL, NULL, 0);
+	    0, 0, NULL);
 	xa_cache = kmem_cache_create("xa_entry", sizeof(struct xarray_entry),
-	    0, NULL, NULL, NULL, NULL, NULL, 0);
+	    0, 0, NULL);
 
 	/* dma_fence_stub lock */
 	mutex_init(&dma_fence_stub_mtx, NULL, MUTEX_DRIVER, NULL);

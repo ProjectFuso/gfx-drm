@@ -11,9 +11,8 @@
 static inline uint64_t
 local_clock(void)
 {
-	struct timespec ts;
-	nanouptime(&ts);
-	return (ts.tv_sec * NSEC_PER_SEC) + ts.tv_nsec;
+	/* illumos: gethrtime() returns nanoseconds since boot */
+	return (uint64_t)gethrtime();
 }
 
 #endif

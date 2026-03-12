@@ -5,6 +5,9 @@
 
 #define NUMA_NO_NODE	(-1)
 
+/* Forward declaration: struct device is defined in linux/device.h */
+struct device;
+
 static inline int
 dev_to_node(struct device *dev)
 {

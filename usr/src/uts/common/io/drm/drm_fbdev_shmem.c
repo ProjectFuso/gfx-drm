@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#ifdef CONFIG_DRM_FBDEV_EMULATION
 
 #include <linux/fb.h>
 
@@ -315,3 +316,6 @@ err_drm_client_init:
 	kfree(fb_helper);
 }
 EXPORT_SYMBOL(drm_fbdev_shmem_setup);
+#else
+int __drm_fbdev_shmem_disabled;
+#endif /* CONFIG_DRM_FBDEV_EMULATION */

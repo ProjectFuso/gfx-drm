@@ -72,6 +72,10 @@ del_timer_sync(struct timer_list *t)
 
 #define timer_shutdown_sync(t)	del_timer_sync(t)
 
+/* from_timer: recover the containing struct from a timer_list pointer */
+#define from_timer(var, callback_timer, timer_fieldname) \
+	container_of(callback_timer, __typeof__(*var), timer_fieldname)
+
 static inline int
 timer_pending(struct timer_list *t)
 {

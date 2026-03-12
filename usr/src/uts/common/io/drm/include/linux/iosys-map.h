@@ -95,45 +95,51 @@ IOSYS_MAP_INIT_OFFSET(struct iosys_map *ism, size_t off)
 	return nism;
 }
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112
-
+/*
+ * illumos: Use sizeof-based dispatch instead of C11 _Generic so these macros
+ * work under -std=gnu99 (the illumos kernel compile mode).
+ */
 #define iosys_map_rd(_ism, _o, _t) ({					\
 	_t v;								\
 	if ((_ism)->is_iomem) {						\
 		void *addr = (_ism)->vaddr_iomem + (_o);		\
-		v = _Generic(v,						\
-		    uint8_t : ioread8(addr),				\
-		    uint16_t: ioread16(addr),				\
-		    uint32_t: ioread32(addr),				\
-		    uint64_t: ioread64(addr));				\
+		if (sizeof(_t) == 1)					\
+			v = (_t)ioread8(addr);				\
+		else if (sizeof(_t) == 2)				\
+			v = (_t)ioread16(addr);				\
+		else if (sizeof(_t) == 4)				\
+			v = (_t)ioread32(addr);				\
+		else							\
+			v = (_t)ioread64(addr);				\
 	} else								\
 		v = READ_ONCE(*(_t *)((_ism)->vaddr + (_o)));		\
 	v;								\
 })
 
 #define iosys_map_wr(_ism, _o, _t, _v) ({				\
-	_t v = (_v);							\
+	_t _wr_v = (_v);						\
 	if ((_ism)->is_iomem) {						\
 		void *addr = (_ism)->vaddr_iomem + (_o);		\
-		_Generic(v,						\
-		    uint8_t : iowrite8(v, addr),			\
-		    uint16_t: iowrite16(v, addr),			\
-		    uint32_t: iowrite32(v, addr),			\
-		    uint64_t: iowrite64(v, addr));			\
+		if (sizeof(_t) == 1)					\
+			iowrite8((uint8_t)_wr_v, addr);			\
+		else if (sizeof(_t) == 2)				\
+			iowrite16((uint16_t)_wr_v, addr);		\
+		else if (sizeof(_t) == 4)				\
+			iowrite32((uint32_t)_wr_v, addr);		\
+		else							\
+			iowrite64((uint64_t)_wr_v, addr);		\
 	} else								\
-		WRITE_ONCE(*(_t *)((_ism)->vaddr + (_o)), v);		\
+		WRITE_ONCE(*(_t *)((_ism)->vaddr + (_o)), _wr_v);	\
 })
 
-#define iosys_map_rd_field(_ism, _o, _t, _f) ({				\
-	_t *t;								\
-	iosys_map_rd(_ism, _o + offsetof(_t, _f), __typeof(t->_f));	\
+#define iosys_map_rd_field(_ism, _o, _t, _f) ({			\
+	_t *_t_ptr;							\
+	iosys_map_rd(_ism, (_o) + offsetof(_t, _f), __typeof__(_t_ptr->_f)); \
 })
 
 #define iosys_map_wr_field(_ism, _o, _t, _f, _v) ({			\
-        _t *t;								\
-        iosys_map_wr(_ism, _o + offsetof(_t, _f), __typeof(t->_f), _v); \
+	_t *_t_ptr;							\
+	iosys_map_wr(_ism, (_o) + offsetof(_t, _f), __typeof__(_t_ptr->_f), _v); \
 })
-
-#endif /* C11 */
 
 #endif

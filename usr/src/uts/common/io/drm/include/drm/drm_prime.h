@@ -92,12 +92,11 @@ void drm_gem_dmabuf_vunmap(struct dma_buf *dma_buf, struct iosys_map *map);
 #ifdef __linux__
 int drm_gem_prime_mmap(struct drm_gem_object *obj, struct vm_area_struct *vma);
 int drm_gem_dmabuf_mmap(struct dma_buf *dma_buf, struct vm_area_struct *vma);
-#else
-struct uvm_object *drm_gem_prime_mmap(struct file *, vm_prot_t, voff_t, vsize_t);
 #endif
 
+/* illumos: use page_t (illumos page descriptor) instead of OpenBSD vm_page */
 struct sg_table *drm_prime_pages_to_sg(struct drm_device *dev,
-				       struct vm_page **pages, unsigned int nr_pages);
+				       page_t **pages, unsigned int nr_pages);
 struct dma_buf *drm_gem_prime_export(struct drm_gem_object *obj,
 				     int flags);
 
@@ -112,7 +111,7 @@ struct drm_gem_object *drm_gem_prime_import(struct drm_device *dev,
 
 void drm_prime_gem_destroy(struct drm_gem_object *obj, struct sg_table *sg);
 
-int drm_prime_sg_to_page_array(struct sg_table *sgt, struct vm_page **pages,
+int drm_prime_sg_to_page_array(struct sg_table *sgt, page_t **pages,
 			       int max_pages);
 int drm_prime_sg_to_dma_addr_array(struct sg_table *sgt, dma_addr_t *addrs,
 				   int max_pages);

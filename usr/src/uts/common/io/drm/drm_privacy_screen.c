@@ -6,6 +6,17 @@
  * Hans de Goede <hdegoede@redhat.com>
  */
 
+/*
+ * illumos: CONFIG_DRM_PRIVACY_SCREEN is not set; the consumer header provides
+ * static inline stubs for all exported functions.  Skip the full implementation
+ * to avoid redefinition conflicts and Linux device-model dependencies.
+ */
+
+/* Dummy symbol to satisfy ctfconvert when the file body is compiled away. */
+int __drm_privacy_screen_illumos_stub;
+
+#ifdef CONFIG_DRM_PRIVACY_SCREEN
+
 #include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -34,10 +45,10 @@
 	container_of(dev, struct drm_privacy_screen, dev)
 
 static DEFINE_MUTEX(drm_privacy_screen_lookup_lock);
-static LIST_HEAD(drm_privacy_screen_lookup_list);
+static DRM_LIST_HEAD(drm_privacy_screen_lookup_list);
 
 static DEFINE_MUTEX(drm_privacy_screen_devs_lock);
-static LIST_HEAD(drm_privacy_screen_devs);
+static DRM_LIST_HEAD(drm_privacy_screen_devs);
 
 /*** drm_privacy_screen_machine.h functions ***/
 
@@ -469,3 +480,5 @@ void drm_privacy_screen_call_notifier_chain(struct drm_privacy_screen *priv)
 	blocking_notifier_call_chain(&priv->notifier_head, 0, priv);
 }
 EXPORT_SYMBOL(drm_privacy_screen_call_notifier_chain);
+
+#endif /* CONFIG_DRM_PRIVACY_SCREEN */

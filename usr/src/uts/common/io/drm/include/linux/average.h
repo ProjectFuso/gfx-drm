@@ -4,7 +4,7 @@
 #define _LINUX_AVERAGE_H
 
 #include <sys/types.h>
-#include <lib/libkern/libkern.h>
+#include <linux/bitops.h>
 
 #define DECLARE_EWMA(name, precision, recip)			\
 struct ewma_##name {						\

@@ -5,6 +5,7 @@
 
 #include <sys/types.h>
 #include <sys/systm.h>
+#include <linux/bitops.h>	/* fls, flsl already defined there */
 
 #define ilog2(x) ((sizeof(x) <= 4) ? (fls(x) - 1) : (flsl(x) - 1))
 

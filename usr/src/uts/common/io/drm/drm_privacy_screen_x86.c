@@ -6,10 +6,17 @@
  * Hans de Goede <hdegoede@redhat.com>
  */
 
+/*
+ * illumos: Needs both CONFIG_DRM_PRIVACY_SCREEN and CONFIG_X86.
+ * Without CONFIG_DRM_PRIVACY_SCREEN the machine.h header provides
+ * static inline stubs; skip the full implementation.
+ */
+int __drm_privacy_screen_x86_illumos_stub;
+
+#if defined(CONFIG_DRM_PRIVACY_SCREEN) && defined(CONFIG_X86)
+
 #include <linux/acpi.h>
 #include <drm/drm_privacy_screen_machine.h>
-
-#ifdef CONFIG_X86
 static struct drm_privacy_screen_lookup arch_lookup;
 
 struct arch_init_data {
@@ -103,4 +110,4 @@ void drm_privacy_screen_lookup_exit(void)
 	if (arch_lookup.provider)
 		drm_privacy_screen_lookup_remove(&arch_lookup);
 }
-#endif /* ifdef CONFIG_X86 */
+#endif /* defined(CONFIG_DRM_PRIVACY_SCREEN) && defined(CONFIG_X86) */

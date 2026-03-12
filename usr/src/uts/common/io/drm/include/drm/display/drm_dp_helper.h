@@ -403,7 +403,11 @@ struct drm_dp_aux {
 	 * channels, the driver needs to do additional locking to
 	 * prevent concurrent access.
 	 */
-	struct rwlock hw_mutex;
+#if defined(__sun)
+	struct mutex hw_mutex;		/* illumos: kmutex_t */
+#else
+	struct rwlock hw_mutex;		/* OpenBSD: rwlock */
+#endif
 
 	/**
 	 * @crc_work: worker that captures CRCs for each frame

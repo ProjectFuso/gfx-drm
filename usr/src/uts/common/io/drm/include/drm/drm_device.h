@@ -310,8 +310,6 @@ struct drm_device {
 	/** @mode_config: Current mode config */
 	struct drm_mode_config mode_config;
 
-	struct pool objpl;
-
 	/** @object_name_lock: GEM information */
 	struct rwlock object_name_lock;
 

@@ -3,6 +3,7 @@
 #ifndef _DRM_DRM_GEM_DMA_HELPER_H
 #define _DRM_DRM_GEM_DMA_HELPER_H
 
+#include <machine/bus.h>
 #include <drm/drm_gem.h>
 
 void drm_gem_dma_free_object(struct drm_gem_object *);

@@ -322,6 +322,7 @@ static int ttm_bo_ioremap(struct ttm_buffer_object *bo,
 		map->virtual = ((u8 *)bo->resource->bus.addr) + offset;
 	} else {
 		map->bo_kmap_type = ttm_bo_map_iomap;
+#ifndef __sun
 		if (mem->bus.caching == ttm_write_combined)
 			flags = BUS_SPACE_MAP_PREFETCHABLE;
 #ifdef CONFIG_X86
@@ -340,6 +341,10 @@ static int ttm_bo_ioremap(struct ttm_buffer_object *bo,
 			map->virtual = bus_space_vaddr(bo->bdev->memt,
 			    bo->resource->bus.bsh);
 		}
+#else /* __sun */
+		/* illumos Phase 1: bus_space not available; stub */
+		map->virtual = NULL;
+#endif /* __sun */
 	}
 	return (!map->virtual) ? -ENOMEM : 0;
 }
@@ -445,8 +450,10 @@ void ttm_bo_kunmap(struct ttm_bo_kmap_obj *map)
 		return;
 	switch (map->bo_kmap_type) {
 	case ttm_bo_map_iomap:
+#ifndef __sun
 		bus_space_unmap(map->bo->bdev->memt, map->bo->resource->bus.bsh,
 		    map->bo->resource->size);
+#endif
 		break;
 	case ttm_bo_map_vmap:
 		vunmap(map->virtual, 
@@ -498,6 +505,7 @@ int ttm_bo_vmap(struct ttm_buffer_object *bo, struct iosys_map *map)
 		if (mem->bus.addr)
 			vaddr_iomem = (void __iomem *)mem->bus.addr;
 		else {
+#ifndef __sun
 			if (mem->bus.caching == ttm_write_combined)
 				flags = BUS_SPACE_MAP_PREFETCHABLE;
 #ifdef CONFIG_X86
@@ -514,6 +522,10 @@ int ttm_bo_vmap(struct ttm_buffer_object *bo, struct iosys_map *map)
 			}
 			vaddr_iomem = bus_space_vaddr(bo->bdev->memt,
 			    mem->bus.bsh);
+#else /* __sun */
+			/* illumos Phase 1: bus_space not available */
+			return -ENOMEM;
+#endif /* __sun */
 		}
 
 		if (!vaddr_iomem)
@@ -570,9 +582,11 @@ void ttm_bo_vunmap(struct ttm_buffer_object *bo, struct iosys_map *map)
 	if (!map->is_iomem)
 		vunmap(map->vaddr,
 		    bo->base.size);
+#ifndef __sun
 	else if (!mem->bus.addr)
 		bus_space_unmap(bo->bdev->memt, mem->bus.bsh,
 		    bo->base.size);
+#endif
 	iosys_map_clear(map);
 
 	ttm_mem_io_free(bo->bdev, bo->resource);

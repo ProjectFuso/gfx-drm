@@ -43,6 +43,7 @@
  */
 
 #include <linux/export.h>
+#include <linux/math64.h>
 #include <linux/interval_tree_generic.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>

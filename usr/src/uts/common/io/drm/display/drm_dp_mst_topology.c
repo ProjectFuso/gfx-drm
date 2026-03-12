@@ -2247,7 +2247,11 @@ int drm_dp_mst_connector_late_register(struct drm_connector *connector,
 #endif
 
 	port->aux.dev = connector->kdev;
+#ifdef __sun
+	return 0;
+#else
 	return drm_dp_aux_register_devnode(&port->aux);
+#endif
 }
 EXPORT_SYMBOL(drm_dp_mst_connector_late_register);
 
@@ -2270,7 +2274,9 @@ void drm_dp_mst_connector_early_unregister(struct drm_connector *connector,
 	drm_dbg_kms(port->mgr->dev, "unregistering %s remote bus\n",
 		    port->aux.name);
 #endif
+#ifndef __sun
 	drm_dp_aux_unregister_devnode(&port->aux);
+#endif
 }
 EXPORT_SYMBOL(drm_dp_mst_connector_early_unregister);
 
@@ -4839,7 +4845,7 @@ int drm_dp_check_act_status(struct drm_dp_mst_topology_mgr *mgr)
 	int ret, status;
 
 	ret = readx_poll_timeout(do_get_act_status, mgr->aux, status,
-				 status & DP_PAYLOAD_ACT_HANDLED || status < 0,
+				 !!(status & DP_PAYLOAD_ACT_HANDLED) || status < 0,
 				 200, timeout_ms * USEC_PER_MSEC);
 	if (ret < 0 && status >= 0) {
 		drm_err(mgr->dev, "Failed to get ACT after %dms, last status: %02x\n",
@@ -5791,13 +5797,13 @@ int drm_dp_mst_topology_mgr_init(struct drm_dp_mst_topology_mgr *mgr,
 {
 	struct drm_dp_mst_topology_state *mst_state;
 
-	rw_init(&mgr->lock, "mst");
-	rw_init(&mgr->qlock, "mstq");
-	rw_init(&mgr->delayed_destroy_lock, "mstdc");
-	rw_init(&mgr->up_req_lock, "mstup");
-	rw_init(&mgr->probe_lock, "mstprb");
+	drm_rw_init(&mgr->lock, "mst");
+	drm_rw_init(&mgr->qlock, "mstq");
+	drm_rw_init(&mgr->delayed_destroy_lock, "mstdc");
+	drm_rw_init(&mgr->up_req_lock, "mstup");
+	drm_rw_init(&mgr->probe_lock, "mstprb");
 #if IS_ENABLED(CONFIG_DRM_DEBUG_DP_MST_TOPOLOGY_REFS)
-	rw_init(&mgr->topology_ref_history_lock, "msttr");
+	drm_rw_init(&mgr->topology_ref_history_lock, "msttr");
 	stack_depot_init();
 #endif
 	INIT_LIST_HEAD(&mgr->tx_msg_downq);

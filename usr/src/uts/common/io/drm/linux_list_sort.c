@@ -31,10 +31,19 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/debug.h>
 
 #include <machine/limits.h>
 
 #include <linux/list.h>
+
+/* illumos: BSD compat macros */
+#ifndef nitems
+#define nitems(x)	(sizeof(x) / sizeof((x)[0]))
+#endif
+#ifndef KASSERT
+#define KASSERT(x)	ASSERT(x)
+#endif
 
 static struct list_head *
 list_sort_merge(struct list_head *, struct list_head *,

@@ -54,7 +54,6 @@ DRM_CORE_OBJS = \
 	drm_debugfs.o \
 	drm_debugfs_crc.o \
 	drm_displayid.o \
-	drm_dp_helper.o \
 	drm_draw.o \
 	drm_drv.o \
 	drm_dumb_buffers.o \

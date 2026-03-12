@@ -58,6 +58,9 @@ LDFLAGS		+= -dy -Nmisc/agpmaster -Nmisc/gfx_private
 include $(UTSBASE)/intel/Makefile.intel
 include $(UTSBASE)/common/io/drm/Makefile.mod
 
+# illumos/amd64: enable the CONFIG_X86 path in DRM source
+CPPFLAGS	+= -DCONFIG_X86
+
 # Suppress common upstream warnings
 CERRWARN	+= -_gcc=-Wno-parentheses
 CERRWARN	+= -_gcc=-Wno-unused-function
@@ -66,7 +69,9 @@ CERRWARN	+= -_gcc=-Wno-unused-but-set-variable
 CERRWARN	+= -_gcc=-Wno-missing-field-initializers
 CERRWARN	+= -_gcc=-Wno-sign-compare
 CERRWARN	+= -_gcc=-Wno-implicit-fallthrough
-CERRWARN	+= -_gcc=-Wno-address-of-packed-member
+CERRWARN	+= -_gcc=-Wno-format
+CERRWARN	+= -_gcc=-Wno-maybe-uninitialized
+CERRWARN	+= -_gcc=-Wno-pointer-sign
 
 #
 #	Define targets

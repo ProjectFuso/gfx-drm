@@ -30,6 +30,12 @@
 
 #include <sys/types.h>
 #include <sys/systm.h>
+#include <sys/debug.h>
+
+/* illumos: BSD compat */
+#ifndef KASSERT
+#define KASSERT(x)	ASSERT(x)
+#endif
 
 static __inline char	*med3(char *, char *, char *,
     int (*)(const void *, const void *, const void *), const void *);

@@ -6,6 +6,24 @@
  * Tux Ascii art taken from cowsay written by Tony Monroe
  */
 
+/*
+ * illumos: drm_panic uses Linux-specific kmsg_dump, panic notifiers, QR codes,
+ * and CONFIG_* string parameters not available on illumos.
+ * Provide stub implementations for all exported symbols.
+ */
+#ifdef __sun
+#include <linux/types.h>
+#include <drm/drm_device.h>
+#include <drm/drm_panic.h>
+
+bool drm_panic_is_enabled(struct drm_device *dev) { return false; }
+void drm_panic_register(struct drm_device *dev) {}
+void drm_panic_unregister(struct drm_device *dev) {}
+void drm_panic_init(void) {}
+void drm_panic_exit(void) {}
+
+#else /* !__sun */
+
 #include <linux/font.h>
 #include <linux/init.h>
 #include <linux/iosys-map.h>
@@ -867,3 +885,5 @@ void drm_panic_exit(void)
 {
 	drm_panic_qr_exit();
 }
+
+#endif /* !__sun */

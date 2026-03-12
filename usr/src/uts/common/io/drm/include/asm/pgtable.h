@@ -13,7 +13,10 @@
  * actual caching policy is enforced when the mapping is created via
  * hat_devload() or ddi_dma_mem_alloc() with the right access attributes.
  */
+#ifndef __pgprot_t_defined
+#define __pgprot_t_defined
 typedef unsigned long pgprot_t;
+#endif
 
 #define pgprot_val(p)		(p)
 #define pgprot_decrypted(p)	(p)

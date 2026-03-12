@@ -635,7 +635,8 @@ static int drm_atomic_plane_check(const struct drm_plane_state *old_plane_state,
 		drm_dbg_atomic(plane->dev,
 			       "[PLANE:%d:%s] invalid pixel format %p4cc, modifier 0x%llx\n",
 			       plane->base.id, plane->name,
-			       &fb->format->format, fb->modifier);
+			       &fb->format->format,
+			       (unsigned long long)fb->modifier);
 		return -EINVAL;
 	}
 

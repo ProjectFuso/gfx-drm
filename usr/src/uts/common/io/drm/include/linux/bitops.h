@@ -28,6 +28,14 @@
  * flsll(x): same for (long long)x.
  */
 static inline int
+fls(int mask)
+{
+	if (mask == 0)
+		return (0);
+	return (int)(sizeof(int) * 8) - __builtin_clz((unsigned int)mask);
+}
+
+static inline int
 flsl(long mask)
 {
 	if (mask == 0)

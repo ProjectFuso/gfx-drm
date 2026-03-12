@@ -213,7 +213,7 @@
 
 struct syncobj_wait_entry {
 	struct list_head node;
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	struct task_struct *task;
 #else
 	struct proc *task;
@@ -486,7 +486,7 @@ int drm_syncobj_find_fence(struct drm_file *file_private,
 		goto out;
 
 	memset(&wait, 0, sizeof(wait));
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 	wait.task = current;
 #else
 	wait.task = curproc;
@@ -1138,7 +1138,7 @@ static signed long drm_syncobj_array_wait_timeout(struct drm_syncobj **syncobjs,
 	for (i = 0; i < count; ++i) {
 		struct dma_fence *fence;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun)
 		entries[i].task = current;
 #else
 		entries[i].task = curproc;

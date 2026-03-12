@@ -9,6 +9,13 @@
 #include <linux/atomic.h>
 #include <linux/lockdep.h>
 
+/*
+ * illumos: struct mutex = kmutex_t (from sys/mutex.h via spinlock_types.h).
+ * Forward-declare so atomic_dec_and_lock can accept struct mutex * parameter
+ * even when linux/mutex.h hasn't finished processing yet.
+ */
+struct mutex;
+
 #define spin_lock_init(l)	mutex_init((l), NULL, MUTEX_DRIVER, NULL)
 #define spin_lock_destroy(l)	mutex_destroy(l)
 
@@ -43,8 +50,8 @@ atomic_dec_and_lock(volatile int *v, struct mutex *mtxp)
 		atomic_dec(v);
 		return 0;
 	}
-
-	mutex_lock(mtxp);
+	/* struct mutex == kmutex_t; use mutex_enter (available from sys/mutex.h) */
+	mutex_enter((kmutex_t *)mtxp);
 	atomic_dec(v);
 	return 1;
 }

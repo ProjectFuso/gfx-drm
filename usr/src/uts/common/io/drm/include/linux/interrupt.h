@@ -3,7 +3,7 @@
 #ifndef _LINUX_INTERRUPT_H
 #define _LINUX_INTERRUPT_H
 
-#include <sys/taskq.h>
+#include <sys/taskq_impl.h>	/* taskq_ent_t, taskq_dispatch_ent */
 #include <linux/hardirq.h>
 #include <linux/irqflags.h>
 #include <linux/atomic.h>
@@ -76,7 +76,7 @@ tasklet_init(struct tasklet_struct *ts, void (*func)(unsigned long),
 	ts->state = 0;
 	atomic_set(&ts->count, 0);
 	ts->use_callback = false;
-	taskq_init_ent(&ts->task);
+	bzero(&ts->task, sizeof(ts->task));
 }
 
 static inline void
@@ -88,7 +88,7 @@ tasklet_setup(struct tasklet_struct *ts,
 	ts->state = 0;
 	atomic_set(&ts->count, 0);
 	ts->use_callback = true;
-	taskq_init_ent(&ts->task);
+	bzero(&ts->task, sizeof(ts->task));
 }
 
 static inline int

@@ -216,7 +216,7 @@ void drm_prime_remove_buf_handle(struct drm_prime_file_private *prime_fpriv,
 
 void drm_prime_init_file_private(struct drm_prime_file_private *prime_fpriv)
 {
-	rw_init(&prime_fpriv->lock, "primlk");
+	drm_rw_init(&prime_fpriv->lock, "primlk");
 	prime_fpriv->dmabufs = RB_ROOT;
 	prime_fpriv->handles = RB_ROOT;
 }
@@ -864,7 +864,7 @@ static const struct dma_buf_ops drm_gem_prime_dmabuf_ops =  {
  * This is useful for implementing &drm_gem_object_funcs.get_sg_table.
  */
 struct sg_table *drm_prime_pages_to_sg(struct drm_device *dev,
-				       struct vm_page **pages, unsigned int nr_pages)
+				       page_t **pages, unsigned int nr_pages)
 {
 	STUB();
 	return NULL;
@@ -1070,7 +1070,7 @@ EXPORT_SYMBOL(drm_gem_prime_import);
  * in the struct page if they are not handled by the exporting driver.
  */
 int __deprecated drm_prime_sg_to_page_array(struct sg_table *sgt,
-					    struct vm_page **pages,
+					    page_t **pages,
 					    int max_entries)
 {
 	STUB();

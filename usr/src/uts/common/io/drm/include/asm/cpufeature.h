@@ -3,9 +3,16 @@
 #ifndef _ASM_CPUFEATURE_H
 #define _ASM_CPUFEATURE_H
 
+#include <stdbool.h>
+
 #if defined(__amd64__) || defined(__i386__)
 
-#include <sys/param.h>
+/*
+ * illumos: CPU feature detection using safe static defaults.
+ * OpenBSD used cpu_ecxfeature/curcpu()->ci_* which don't exist on illumos.
+ * For Phase 1 use conservative values: amd64 always has CLFLUSH and PAT;
+ * SSE4.1 and HYPERVISOR are left as false (DRM will use fallback paths).
+ */
 
 #define X86_FEATURE_CLFLUSH	1
 #define X86_FEATURE_XMM4_1	2
@@ -17,19 +24,18 @@ static_cpu_has(uint16_t f)
 {
 	switch (f) {
 	case X86_FEATURE_XMM4_1:
-		return (cpu_ecxfeature & CPUIDECX_SSE41) != 0;
+		return false;		/* conservative: use SW fallback */
 #ifdef __amd64__
 	case X86_FEATURE_CLFLUSH:
 	case X86_FEATURE_PAT:
-		return true;
+		return true;		/* amd64 always has CLFLUSH and PAT */
 #else
 	case X86_FEATURE_CLFLUSH:
-		return curcpu()->ci_cflushsz != 0;
 	case X86_FEATURE_PAT:
-		return (curcpu()->ci_feature_flags & CPUID_PAT) != 0;
+		return false;
 #endif
 	case X86_FEATURE_HYPERVISOR:
-		return (cpu_ecxfeature & CPUIDECX_HV) != 0;
+		return false;		/* conservative */
 	default:
 		return false;
 	}
@@ -46,10 +52,8 @@ pat_enabled(void)
 static inline void
 clflushopt(volatile void *addr)
 {
-	if (curcpu()->ci_feature_sefflags_ebx & SEFF0EBX_CLFLUSHOPT)
-		__asm volatile("clflushopt %0" : "+m" (*(volatile char *)addr));
-	else
-		__asm volatile("clflush %0" : "+m" (*(volatile char *)addr));
+	/* illumos: always use clflush (safe fallback; no curcpu() available) */
+	__asm volatile("clflush %0" : "+m" (*(volatile char *)addr));
 }
 
 #endif

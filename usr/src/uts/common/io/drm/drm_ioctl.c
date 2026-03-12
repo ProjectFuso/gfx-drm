@@ -206,7 +206,7 @@ int drm_getclient(struct drm_device *dev, void *data,
 		client->pid = task_pid_vnr(current);
 		client->uid = overflowuid;
 #else
-		client->pid = curproc->p_p->ps_pid;
+		client->pid = curproc->p_pid;
 		client->uid = 0xfffe;
 #endif
 		client->magic = 0;
@@ -353,7 +353,7 @@ drm_setclientcap(struct drm_device *dev, void *data, struct drm_file *file_priv)
 #ifdef __linux__
 		if (current->comm[0] == 'X' && req->value == 1) {
 #else
-		if (curproc->p_p->ps_comm[0] == 'X' && req->value == 1) {
+		if (curproc->p_user.u_comm[0] == 'X' && req->value == 1) {
 #endif
 			pr_info("broken atomic modeset userspace detected, disabling atomic\n");
 			return -EOPNOTSUPP;
@@ -960,6 +960,7 @@ bool drm_ioctl_flags(unsigned int nr, unsigned int *flags)
 }
 EXPORT_SYMBOL(drm_ioctl_flags);
 
+#ifndef __sun
 int
 drm_do_ioctl(struct drm_device *dev, int minor, u_long cmd, caddr_t data)
 {
@@ -1066,3 +1067,4 @@ drmioctl(dev_t kdev, u_long cmd, caddr_t data, int flags, struct proc *p)
 
 	return (error);
 }
+#endif /* !__sun */

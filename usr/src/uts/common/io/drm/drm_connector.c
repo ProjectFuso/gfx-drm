@@ -277,10 +277,10 @@ static int __drm_connector_init(struct drm_device *dev,
 	INIT_LIST_HEAD(&connector->global_connector_list_entry);
 	INIT_LIST_HEAD(&connector->probed_modes);
 	INIT_LIST_HEAD(&connector->modes);
-	rw_init(&connector->mutex, "cnlk");
-	rw_init(&connector->eld_mutex, "eldlk");
-	rw_init(&connector->edid_override_mutex, "eolk");
-	rw_init(&connector->hdmi.infoframes.lock, "hilk");
+	drm_rw_init(&connector->mutex, "cnlk");
+	drm_rw_init(&connector->eld_mutex, "eldlk");
+	drm_rw_init(&connector->edid_override_mutex, "eolk");
+	drm_rw_init(&connector->hdmi.infoframes.lock, "hilk");
 	connector->edid_blob_ptr = NULL;
 	connector->epoch_counter = 0;
 	connector->tile_blob_ptr = NULL;

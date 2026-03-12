@@ -11,6 +11,18 @@
 
 #include <sys/taskq.h>
 #include <sys/taskq_impl.h>
+
+/*
+ * illumos: taskq_cancel_id is not available in all illumos versions.
+ * Use taskq_wait_id as a fallback (waits for the task instead of cancelling).
+ */
+#ifndef taskq_cancel_id
+#define taskq_cancel_id(tq, id)		taskq_wait_id(tq, id)
+#endif
+
+/* Forward declaration needed before flush_delayed_work prototype below */
+struct delayed_work;
+#include <linux/container_of.h>
 #include <linux/bitops.h>
 #include <linux/atomic.h>
 #include <linux/rcupdate.h>
@@ -167,28 +179,28 @@ schedule_work(struct work_struct *work)
 }
 
 static inline bool
-schedule_delayed_work(struct delayed_work *dwork, int jiffies)
+schedule_delayed_work(struct delayed_work *dwork, int delay_ticks)
 {
 	dwork->tq = (taskq_t *)system_wq;
-	callout_reset(&dwork->to, jiffies, __delayed_work_tick, dwork);
+	callout_reset(&dwork->to, delay_ticks, __delayed_work_tick, dwork);
 	return true;
 }
 
 static inline bool
 queue_delayed_work(struct workqueue_struct *wq,
-    struct delayed_work *dwork, int jiffies)
+    struct delayed_work *dwork, int delay_ticks)
 {
 	dwork->tq = (taskq_t *)wq;
-	callout_reset(&dwork->to, jiffies, __delayed_work_tick, dwork);
+	callout_reset(&dwork->to, delay_ticks, __delayed_work_tick, dwork);
 	return true;
 }
 
 static inline bool
 mod_delayed_work(struct workqueue_struct *wq,
-    struct delayed_work *dwork, int jiffies)
+    struct delayed_work *dwork, int delay_ticks)
 {
 	dwork->tq = (taskq_t *)wq;
-	callout_reset(&dwork->to, jiffies, __delayed_work_tick, dwork);
+	callout_reset(&dwork->to, delay_ticks, __delayed_work_tick, dwork);
 	return true;
 }
 

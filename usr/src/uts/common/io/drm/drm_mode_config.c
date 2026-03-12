@@ -408,11 +408,11 @@ int drmm_mode_config_init(struct drm_device *dev)
 {
 	int ret;
 
-	rw_init(&dev->mode_config.mutex, "mcrwl");
+	drm_rw_init(&dev->mode_config.mutex, "mcrwl");
 	drm_modeset_lock_init(&dev->mode_config.connection_mutex);
-	rw_init(&dev->mode_config.idr_mutex, "idrlk");
-	rw_init(&dev->mode_config.fb_lock, "fblk");
-	rw_init(&dev->mode_config.blob_lock, "mcblk");
+	drm_rw_init(&dev->mode_config.idr_mutex, "idrlk");
+	drm_rw_init(&dev->mode_config.fb_lock, "fblk");
+	drm_rw_init(&dev->mode_config.blob_lock, "mcblk");
 	INIT_LIST_HEAD(&dev->mode_config.fb_list);
 	INIT_LIST_HEAD(&dev->mode_config.crtc_list);
 	INIT_LIST_HEAD(&dev->mode_config.connector_list);

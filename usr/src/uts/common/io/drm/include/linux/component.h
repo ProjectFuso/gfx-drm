@@ -3,7 +3,7 @@
 #ifndef _LINUX_COMPONENT_H
 #define _LINUX_COMPONENT_H
 
-#include <sys/_null.h>
+#include <sys/types.h>	/* illumos: was sys/_null.h (OpenBSD); NULL comes from sys/types.h */
 
 struct component_match;
 struct device;

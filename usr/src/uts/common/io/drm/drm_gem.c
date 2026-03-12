@@ -52,6 +52,8 @@
 
 #include "drm_internal.h"
 
+#ifndef __sun	/* illumos: OpenBSD UVM-specific code */
+
 #include <sys/conf.h>
 #include <uvm/uvm.h>
 
@@ -208,6 +210,8 @@ udv_attach_drm(dev_t device, vm_prot_t accessprot, voff_t off, vsize_t size)
 	return &obj->uobj;
 }
 
+#endif /* !__sun */
+
 /** @file drm_gem.c
  *
  * This file provides some of the base ioctls and library routines for
@@ -251,7 +255,7 @@ drm_gem_init(struct drm_device *dev)
 {
 	struct drm_vma_offset_manager *vma_offset_manager;
 
-	rw_init(&dev->object_name_lock, "drmonl");
+	drm_rw_init(&dev->object_name_lock, "drmonl");
 	idr_init_base(&dev->object_name_idr, 1);
 
 	vma_offset_manager = drmm_kzalloc(dev, sizeof(*vma_offset_manager),
@@ -297,7 +301,7 @@ int drm_gem_object_init(struct drm_device *dev,
 }
 EXPORT_SYMBOL(drm_gem_object_init);
 
-#else
+#elif !defined(__sun)	/* OpenBSD UVM-backed GEM object init */
 
 int drm_gem_object_init(struct drm_device *dev,
 			struct drm_gem_object *obj, size_t size)
@@ -308,12 +312,22 @@ int drm_gem_object_init(struct drm_device *dev,
 		printf("%s size too big %lu\n", __func__, size);
 		return -ENOMEM;
 	}
-	
+
 	obj->uao = uao_create(size, 0);
 	uvm_obj_init(&obj->uobj, &drm_pgops, 1);
-	
+
 	return 0;
 }
+
+#else	/* illumos: no shmem/UVM; private GEM objects only */
+
+int drm_gem_object_init(struct drm_device *dev,
+			struct drm_gem_object *obj, size_t size)
+{
+	drm_gem_private_object_init(dev, obj, size);
+	return 0;
+}
+EXPORT_SYMBOL(drm_gem_object_init);
 
 #endif
 
@@ -393,20 +407,20 @@ static void drm_gem_object_handle_get(struct drm_gem_object *obj)
 bool drm_gem_object_handle_get_if_exists_unlocked(struct drm_gem_object *obj)
 {
 	struct drm_device *dev = obj->dev;
+	bool ret;
 
-	guard(mutex)(&dev->object_name_lock);
+	mutex_lock(&dev->object_name_lock);
 
-	/*
-	 * First ref taken during GEM object creation, if any. Some
-	 * drivers set up internal framebuffers with GEM objects that
-	 * do not have a GEM handle. Hence, this counter can be zero.
-	 */
-	if (!obj->handle_count)
+	if (!obj->handle_count) {
+		mutex_unlock(&dev->object_name_lock);
 		return false;
+	}
 
 	drm_gem_object_handle_get(obj);
+	ret = true;
 
-	return true;
+	mutex_unlock(&dev->object_name_lock);
+	return ret;
 }
 
 /**
@@ -1229,7 +1243,7 @@ drm_gem_object_free(struct kref *kref)
 	if (WARN_ON(!obj->funcs->free))
 		return;
 
-	obj->funcs->free(obj);
+	(obj->funcs->free)(obj); /* parens prevent macro expansion of 'free' */
 }
 EXPORT_SYMBOL(drm_gem_object_free);
 
@@ -1395,7 +1409,7 @@ int drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 	return ret;
 }
 EXPORT_SYMBOL(drm_gem_mmap);
-#else /* ! __linux__ */
+#elif !defined(__sun)	/* OpenBSD mmap path, not used on illumos */
 
 int drm_gem_mmap_obj(struct drm_gem_object *obj, unsigned long obj_size,
 		     vm_prot_t accessprot, voff_t off, vsize_t size)

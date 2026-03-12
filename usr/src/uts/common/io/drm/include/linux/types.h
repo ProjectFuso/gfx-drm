@@ -5,6 +5,7 @@
 
 #include <sys/types.h>
 #include <sys/int_types.h>
+#include <stdbool.h>
 
 typedef int8_t   __s8;
 typedef uint8_t  __u8;
@@ -43,7 +44,10 @@ typedef unsigned int umode_t;
 typedef unsigned int gfp_t;
 
 typedef unsigned long pgoff_t;
-typedef int pgprot_t;
+#ifndef __pgprot_t_defined
+#define __pgprot_t_defined
+typedef unsigned long pgprot_t;
+#endif
 
 typedef int atomic_t;
 

@@ -6,8 +6,49 @@
 #include <sys/kmem.h>
 #include <sys/types.h>
 
+/*
+ * OpenBSD-style malloc/free with type tags and M_* flags.
+ * Many DRM source files use malloc(size, M_DRM, M_WAITOK|M_ZERO) and
+ * free(ptr, M_DRM, size) from OpenBSD.  Provide the compat wrappers here
+ * so any file that includes slab.h gets them.
+ * Protected by _DRM_OPENBSD_MALLOC_DEFINED to avoid multiple definitions
+ * (sys/specdev.h and linux/pci.h use the same guard).
+ */
+#ifndef _DRM_OPENBSD_MALLOC_DEFINED
+#define _DRM_OPENBSD_MALLOC_DEFINED
+
+#ifndef M_DRM
+#define M_DRM		1
+#endif
+#ifndef M_WAITOK
+#define M_WAITOK	0x0001
+#define M_NOWAIT	0x0002
+#define M_ZERO		0x0008
+#define M_CANFAIL	0x0004
+#endif
+
+static inline void *
+_drm_openbsd_malloc(size_t size, int type, int flags)
+{
+	(void)type;
+	if (flags & M_ZERO)
+		return kmem_zalloc(size, (flags & M_NOWAIT) ? KM_NOSLEEP : KM_SLEEP);
+	return kmem_alloc(size, (flags & M_NOWAIT) ? KM_NOSLEEP : KM_SLEEP);
+}
+
+#undef malloc
+#undef free
+#define malloc(size, type, flags)  _drm_openbsd_malloc((size), (type), (flags))
+#define free(ptr, type, size)      do { if (ptr) kmem_free((ptr), (size)); } while (0)
+
+#endif /* _DRM_OPENBSD_MALLOC_DEFINED */
+
+/* illumos: MIN may not be defined in headers we include here */
+#ifndef MIN
+#define MIN(a, b)	((a) < (b) ? (a) : (b))
+#endif
+
 #include <linux/types.h>
-#include <linux/workqueue.h>
 #include <linux/gfp.h>
 #include <linux/processor.h>	/* for CACHELINESIZE */
 
@@ -131,34 +172,47 @@ kvfree(const void *ptr)
 	kfree(ptr);
 }
 
-struct kmem_cache;
-
+/*
+ * illumos: kmem_cache_create/alloc/free/destroy clash with illumos function
+ * names (sys/kmem.h). Rename wrappers with drm_ prefix, then macro-define
+ * the Linux names to call our wrappers.  The function bodies execute before
+ * the #define macros are set, so internal calls refer to the illumos externs.
+ */
 static inline struct kmem_cache *
-kmem_cache_create(const char *name, size_t size, size_t align,
+drm_kmem_cache_create(const char *name, size_t size, size_t align,
     unsigned long flags, void (*ctor)(void *))
 {
-	return (struct kmem_cache *)kmem_cache_create(name, size, align,
-	    (void (*)(void *, kmem_cache_t *, unsigned long))ctor, NULL, NULL,
-	    NULL, NULL, 0);
+	/*
+	 * illumos kmem_cache_create: char*, size, align,
+	 *   ctor(void*,void*,int), dtor(void*,void*),
+	 *   reclaim(void*), privarg, vmem*, flags.
+	 * Pass NULL for ctor/dtor/reclaim; DRM doesn't use illumos-style ctors.
+	 */
+	return (struct kmem_cache *)kmem_cache_create((char *)(uintptr_t)name,
+	    size, align, NULL, NULL, NULL, NULL, NULL, 0);
 }
+#define kmem_cache_create	drm_kmem_cache_create
 
 static inline void *
-kmem_cache_alloc(struct kmem_cache *cache, int flags)
+drm_kmem_cache_alloc(struct kmem_cache *cache, int flags)
 {
 	int kflags = (flags & KM_NOSLEEP) ? KM_NOSLEEP : KM_SLEEP;
 	return kmem_cache_alloc((kmem_cache_t *)cache, kflags);
 }
+#define kmem_cache_alloc	drm_kmem_cache_alloc
 
 static inline void
-kmem_cache_free(struct kmem_cache *cache, void *obj)
+drm_kmem_cache_free(struct kmem_cache *cache, void *obj)
 {
 	kmem_cache_free((kmem_cache_t *)cache, obj);
 }
+#define kmem_cache_free		drm_kmem_cache_free
 
 static inline void
-kmem_cache_destroy(struct kmem_cache *cache)
+drm_kmem_cache_destroy(struct kmem_cache *cache)
 {
 	kmem_cache_destroy((kmem_cache_t *)cache);
 }
+#define kmem_cache_destroy	drm_kmem_cache_destroy
 
 #endif

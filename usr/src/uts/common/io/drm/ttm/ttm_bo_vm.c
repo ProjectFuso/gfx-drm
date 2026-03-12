@@ -349,7 +349,7 @@ vm_fault_t ttm_bo_vm_fault(struct vm_fault *vmf)
 }
 EXPORT_SYMBOL(ttm_bo_vm_fault);
 
-#else /* !__linux__ */
+#elif !defined(__sun) /* OpenBSD */
 
 static vm_fault_t ttm_bo_vm_fault_idle(struct ttm_buffer_object *bo,
     struct uvm_faultinfo *ufi)
@@ -620,6 +620,9 @@ out:
 }
 EXPORT_SYMBOL(ttm_bo_vm_fault);
 
+#else /* __sun */
+/* illumos Phase 1: no UVM fault handling */
+int __ttm_bo_vm_illumos_stub;
 #endif /* !__linux__ */
 
 #ifdef notyet
@@ -789,7 +792,7 @@ int ttm_bo_mmap_obj(struct vm_area_struct *vma, struct ttm_buffer_object *bo)
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_mmap_obj);
-#else /* !__linux__ */
+#elif !defined(__sun) /* OpenBSD */
 int ttm_bo_mmap_obj(struct ttm_buffer_object *bo)
 {
 	/* Enforce no COW since would have really strange behavior with it. */
@@ -820,4 +823,8 @@ int ttm_bo_mmap_obj(struct ttm_buffer_object *bo)
 #endif
 	return 0;
 }
+#else /* __sun */
+/* illumos Phase 1 stubs */
+int ttm_bo_mmap_obj(struct ttm_buffer_object *bo) { ttm_bo_get(bo); return 0; }
+EXPORT_SYMBOL(ttm_bo_mmap_obj);
 #endif /* !__linux__ */

@@ -33,12 +33,22 @@
  */
 
 #include <sys/types.h>
+
+/*
+ * illumos: MTRR management is handled by the HAT layer, not by DRM.
+ * Force DRM_NO_MTRR stubs on illumos regardless of architecture.
+ * The OpenBSD-specific headers (lib/libkern/libkern.h, sys/memrange.h)
+ * and the mem_range_attr_set() API do not exist on illumos.
+ */
+#ifdef __sun
+#define DRM_NO_MTRR	1
+#else
 #include <lib/libkern/libkern.h>
 #include <sys/memrange.h>
-
 #if !defined(__amd64__) && !defined(__i386__)
 #define DRM_NO_MTRR	1
 #endif
+#endif /* __sun */
 
 int
 drm_mtrr_add(unsigned long offset, size_t size, int flags)

@@ -3,11 +3,7 @@
 #ifndef _LINUX_MM_TYPES_H
 #define _LINUX_MM_TYPES_H
 
-#include <linux/workqueue.h>
-#include <linux/completion.h>
-#include <linux/rwsem.h>
-
-/* illumos: uvm/uvm_extern.h removed; no OpenBSD UVM on illumos */
+/* illumos: workqueue/completion/rwsem not needed for VM_FAULT_* macros */
 
 #define VM_FAULT_NOPAGE		1
 #define VM_FAULT_SIGBUS		2
