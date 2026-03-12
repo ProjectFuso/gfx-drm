@@ -52,8 +52,7 @@
 
 #include "drm_internal.h"
 
-#ifndef __sun	/* illumos: OpenBSD UVM-specific code */
-
+#if 0 /* removed: OpenBSD UVM-specific code, not needed for Linux→illumos */
 #include <sys/conf.h>
 #include <uvm/uvm.h>
 
@@ -210,7 +209,7 @@ udv_attach_drm(dev_t device, vm_prot_t accessprot, voff_t off, vsize_t size)
 	return &obj->uobj;
 }
 
-#endif /* !__sun */
+#endif /* 0: removed OpenBSD UVM code */
 
 /** @file drm_gem.c
  *
