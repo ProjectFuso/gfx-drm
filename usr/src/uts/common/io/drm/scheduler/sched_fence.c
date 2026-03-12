@@ -238,7 +238,7 @@ struct drm_sched_fence *drm_sched_fence_alloc(struct drm_sched_entity *entity,
 		return NULL;
 
 	fence->owner = owner;
-	mtx_init(&fence->lock, IPL_TTY);
+	spin_lock_init(&fence->lock);
 
 	return fence;
 }

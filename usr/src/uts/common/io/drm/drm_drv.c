@@ -1370,7 +1370,7 @@ drm_attach(struct device *parent, struct device *self, void *aux)
 	dev->driver = da->driver;
 
 	INIT_LIST_HEAD(&dev->managed.resources);
-	mtx_init(&dev->managed.lock, IPL_TTY);
+	spin_lock_init(&dev->managed.lock);
 
 	/* no per-device feature limits by default */
 	dev->driver_features = ~0u;
@@ -1422,12 +1422,12 @@ drm_attach(struct device *parent, struct device *self, void *aux)
 #endif
 	}
 
-	mtx_init(&dev->quiesce_mtx, IPL_NONE);
-	mtx_init(&dev->event_lock, IPL_TTY);
-	drm_rw_init(&dev->struct_mutex, "drmdevlk");
-	drm_rw_init(&dev->filelist_mutex, "drmflist");
-	drm_rw_init(&dev->clientlist_mutex, "drmclist");
-	drm_rw_init(&dev->master_mutex, "drmmast");
+	spin_lock_init(&dev->quiesce_mtx);
+	spin_lock_init(&dev->event_lock);
+	mutex_init(&dev->struct_mutex);
+	mutex_init(&dev->filelist_mutex);
+	mutex_init(&dev->clientlist_mutex);
+	mutex_init(&dev->master_mutex);
 
 	ret = drmm_add_action(dev, drm_dev_init_release, NULL);
 	if (ret)

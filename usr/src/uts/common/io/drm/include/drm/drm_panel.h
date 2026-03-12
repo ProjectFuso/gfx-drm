@@ -242,7 +242,7 @@ struct drm_panel {
 	 *
 	 * Lock for followers list.
 	 */
-	struct rwlock follower_lock;
+	struct mutex follower_lock;
 
 	/**
 	 * @prepare_prev_first:

@@ -345,7 +345,7 @@ struct drm_file {
 	struct list_head fbs;
 
 	/** @fbs_lock: Protects @fbs. */
-	struct rwlock fbs_lock;
+	struct mutex fbs_lock;
 
 	/**
 	 * @blobs:
@@ -391,7 +391,7 @@ struct drm_file {
 	int event_space;
 
 	/** @event_read_lock: Serializes drm_read(). */
-	struct rwlock event_read_lock;
+	struct mutex event_read_lock;
 
 	/**
 	 * @prime:

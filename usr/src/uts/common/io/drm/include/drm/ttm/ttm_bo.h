@@ -437,15 +437,7 @@ void ttm_bo_vm_close(struct vm_area_struct *vma);
 int ttm_bo_vm_access(struct vm_area_struct *vma, unsigned long addr,
 		     void *buf, int len, int write);
 vm_fault_t ttm_bo_vm_dummy_page(struct vm_fault *vmf, pgprot_t prot);
-#else
-vm_fault_t ttm_bo_vm_reserve(struct ttm_buffer_object *bo);
-vm_fault_t ttm_bo_vm_fault_reserved(struct uvm_faultinfo *ufi,
-				    vaddr_t vaddr,
-				    pgoff_t num_prefault,
-				    pgoff_t fault_page_size);
-int ttm_bo_vm_fault(struct uvm_faultinfo *, vaddr_t, vm_page_t *,
-    int, int, vm_fault_t, vm_prot_t, int);
-#endif /* !__linux__ */
+#endif /* __linux__ */
 
 int ttm_bo_mem_space(struct ttm_buffer_object *bo,
 		     struct ttm_placement *placement,

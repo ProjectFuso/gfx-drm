@@ -44,7 +44,7 @@
  */
 struct drm_prime_file_private {
 /* private: */
-	struct rwlock lock;
+	struct mutex lock;
 	struct rb_root dmabufs;
 	struct rb_root handles;
 };

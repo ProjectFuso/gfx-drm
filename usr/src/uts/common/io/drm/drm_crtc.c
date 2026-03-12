@@ -138,7 +138,7 @@ void drm_crtc_unregister_all(struct drm_device *dev)
 static int drm_crtc_crc_init(struct drm_crtc *crtc)
 {
 #ifdef CONFIG_DEBUG_FS
-	mtx_init(&crtc->crc.lock, IPL_NONE);
+	spin_lock_init(&crtc->crc.lock);
 	init_waitqueue_head(&crtc->crc.wq);
 	crtc->crc.source = kstrdup("auto", GFP_KERNEL);
 	if (!crtc->crc.source)
@@ -256,7 +256,7 @@ static int __drm_crtc_init_with_planes(struct drm_device *dev, struct drm_crtc *
 	crtc->funcs = funcs;
 
 	INIT_LIST_HEAD(&crtc->commit_list);
-	mtx_init(&crtc->commit_lock, IPL_NONE);
+	spin_lock_init(&crtc->commit_lock);
 
 	drm_modeset_lock_init(&crtc->mutex);
 	ret = drm_mode_object_add(dev, &crtc->base, DRM_MODE_OBJECT_CRTC);
@@ -274,7 +274,7 @@ static int __drm_crtc_init_with_planes(struct drm_device *dev, struct drm_crtc *
 	}
 
 	crtc->fence_context = dma_fence_context_alloc(1);
-	mtx_init(&crtc->fence_lock, IPL_TTY);
+	spin_lock_init(&crtc->fence_lock);
 	snprintf(crtc->timeline_name, sizeof(crtc->timeline_name),
 		 "CRTC:%d-%s", crtc->base.id, crtc->name);
 

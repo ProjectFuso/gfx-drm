@@ -137,7 +137,7 @@ void drm_flip_work_init(struct drm_flip_work *work,
 	work->name = name;
 	INIT_LIST_HEAD(&work->queued);
 	INIT_LIST_HEAD(&work->commited);
-	mtx_init(&work->lock, IPL_TTY);
+	spin_lock_init(&work->lock);
 	work->func = func;
 
 	INIT_WORK(&work->worker, flip_worker);

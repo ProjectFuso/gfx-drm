@@ -2090,16 +2090,8 @@ EXPORT_SYMBOL(drm_dp_remote_aux_init);
  */
 void drm_dp_aux_init(struct drm_dp_aux *aux)
 {
-	/*
-	 * witness does not understand mutex_lock_nest_lock()
-	 * order reversal in i915 with this lock
-	 */
-#ifdef __sun
-	mutex_init(&aux->hw_mutex, "drmdp", MUTEX_DRIVER, NULL);
-#else
-	rw_init_flags(&aux->hw_mutex, "drmdp", RWL_NOWITNESS);
-#endif
-	drm_rw_init(&aux->cec.lock, "drmcec");
+	mutex_init(&aux->hw_mutex);
+	mutex_init(&aux->cec.lock);
 	INIT_WORK(&aux->crc_work, drm_dp_aux_crc_work);
 
 	aux->ddc.algo = &drm_dp_i2c_algo;
@@ -4056,9 +4048,9 @@ EXPORT_SYMBOL(drm_edp_backlight_init);
 
 static int dp_aux_backlight_update_status(struct backlight_device *bd)
 {
-	STUB();
-	return -ENOSYS;
-#ifdef notyet
+#ifdef __sun
+	return -ENOSYS;	/* illumos Phase 1: backlight not implemented */
+#else
 	struct dp_aux_backlight *bl = bl_get_data(bd);
 	u16 brightness = backlight_get_brightness(bd);
 	int ret = 0;

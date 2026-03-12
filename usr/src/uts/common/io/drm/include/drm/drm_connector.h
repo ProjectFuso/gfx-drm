@@ -1697,7 +1697,7 @@ struct drm_connector_hdmi {
 		 * @lock: Mutex protecting against concurrent access to
 		 * the infoframes, most notably between KMS and ALSA.
 		 */
-		struct rwlock lock;
+		struct mutex lock;
 
 		/**
 		 * @audio: Current Audio Infoframes structure. Protected
@@ -1760,7 +1760,7 @@ struct drm_connector {
 	 * @registered. Most of the connector state is still protected by
 	 * &drm_mode_config.mutex.
 	 */
-	struct rwlock mutex;
+	struct mutex mutex;
 
 	/**
 	 * @index: Compacted connector index, which matches the position inside
@@ -1982,7 +1982,7 @@ struct drm_connector {
 	/**
 	 * @edid_override_mutex: Protect access to edid_override.
 	 */
-	struct rwlock edid_override_mutex;
+	struct mutex edid_override_mutex;
 
 	/** @epoch_counter: used to detect any other changes in connector, besides status */
 	u64 epoch_counter;
@@ -2006,7 +2006,7 @@ struct drm_connector {
 	/** @eld: EDID-like data, if present, protected by @eld_mutex */
 	uint8_t eld[MAX_ELD_BYTES];
 	/** @eld_mutex: protection for concurrenct access to @eld */
-	struct rwlock eld_mutex;
+	struct mutex eld_mutex;
 
 	/** @latency_present: AV delay info from ELD, if found */
 	bool latency_present[2];

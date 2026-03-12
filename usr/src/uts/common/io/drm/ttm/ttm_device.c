@@ -211,7 +211,7 @@ int ttm_device_init(struct ttm_device *bdev, const struct ttm_device_funcs *func
 	ttm_pool_init(&bdev->pool, dev, nid, use_dma_alloc, use_dma32);
 
 	bdev->vma_manager = vma_manager;
-	mtx_init(&bdev->lru_lock, IPL_NONE);
+	spin_lock_init(&bdev->lru_lock);
 	INIT_LIST_HEAD(&bdev->pinned);
 	bdev->dev_mapping = mapping;
 	mutex_lock(&ttm_global_mutex);

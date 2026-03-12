@@ -216,7 +216,7 @@ void drm_prime_remove_buf_handle(struct drm_prime_file_private *prime_fpriv,
 
 void drm_prime_init_file_private(struct drm_prime_file_private *prime_fpriv)
 {
-	drm_rw_init(&prime_fpriv->lock, "primlk");
+	mutex_init(&prime_fpriv->lock);
 	prime_fpriv->dmabufs = RB_ROOT;
 	prime_fpriv->handles = RB_ROOT;
 }
@@ -803,14 +803,10 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL(drm_gem_prime_mmap);
-#else
-struct uvm_object *
-drm_gem_prime_mmap(struct file *filp, vm_prot_t accessprot, voff_t off,
-    vsize_t size)
-{
-	STUB();
-	return NULL;
-}
+#else /* __sun */
+/* illumos: mmap via seg_drm is deferred to Phase 2 */
+int drm_gem_prime_mmap(struct drm_gem_object *obj, void *vma) { return -ENOSYS; }
+EXPORT_SYMBOL(drm_gem_prime_mmap);
 #endif
 
 #ifdef notyet

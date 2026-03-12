@@ -573,7 +573,7 @@ int drm_syncobj_create(struct drm_syncobj **out_syncobj, uint32_t flags,
 	kref_init(&syncobj->refcount);
 	INIT_LIST_HEAD(&syncobj->cb_list);
 	INIT_LIST_HEAD(&syncobj->ev_fd_list);
-	mtx_init(&syncobj->lock, IPL_NONE);
+	spin_lock_init(&syncobj->lock);
 
 	if (flags & DRM_SYNCOBJ_CREATE_SIGNALED) {
 		ret = drm_syncobj_assign_null_handle(syncobj);
@@ -827,7 +827,7 @@ void
 drm_syncobj_open(struct drm_file *file_private)
 {
 	idr_init_base(&file_private->syncobj_idr, 1);
-	mtx_init(&file_private->syncobj_table_lock, IPL_NONE);
+	spin_lock_init(&file_private->syncobj_table_lock);
 }
 
 static int

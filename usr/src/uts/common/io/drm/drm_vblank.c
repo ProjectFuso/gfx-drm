@@ -542,8 +542,8 @@ int drm_vblank_init(struct drm_device *dev, unsigned int num_crtcs)
 	int ret;
 	unsigned int i;
 
-	mtx_init(&dev->vbl_lock, IPL_TTY);
-	mtx_init(&dev->vblank_time_lock, IPL_TTY);
+	spin_lock_init(&dev->vbl_lock);
+	spin_lock_init(&dev->vblank_time_lock);
 
 	dev->vblank = drmm_kcalloc(dev, num_crtcs, sizeof(*dev->vblank), GFP_KERNEL);
 	if (!dev->vblank)

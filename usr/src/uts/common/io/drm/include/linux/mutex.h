@@ -151,23 +151,4 @@ int atomic_dec_and_mutex_lock(volatile int *, kmutex_t *);
 		(RW_WRITE_HELD(&((struct rwlock *)(void *)(m))->rw)),	\
 		(MUTEX_HELD((kmutex_t *)(void *)(m))))
 
-/*
- * OpenBSD mutex compat:
- * mtx_init(m, ipl) — OpenBSD mutex initializer with interrupt priority level.
- * IPL_NONE         — no interrupt masking (maps to MUTEX_DEFAULT on illumos).
- * mtx_enter/mtx_leave — OpenBSD lock/unlock.
- */
-#ifndef IPL_NONE
-#define IPL_NONE	0
-#endif
-#ifndef mtx_init
-#define mtx_init(m, ipl)	mutex_init_ll(m)
-#endif
-#ifndef mtx_enter
-#define mtx_enter(m)		mutex_lock(m)
-#endif
-#ifndef mtx_leave
-#define mtx_leave(m)		mutex_unlock(m)
-#endif
-
 #endif

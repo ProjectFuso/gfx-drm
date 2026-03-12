@@ -50,14 +50,14 @@ struct drm_vma_offset_file {
 };
 
 struct drm_vma_offset_node {
-	struct mutex vm_lock;
+	rwlock_t vm_lock;
 	struct drm_mm_node vm_node;
 	struct rb_root vm_files;
 	void *driver_private;
 };
 
 struct drm_vma_offset_manager {
-	struct mutex vm_lock;
+	rwlock_t vm_lock;
 	struct drm_mm vm_addr_space_mm;
 };
 
@@ -149,7 +149,7 @@ static inline void drm_vma_node_reset(struct drm_vma_offset_node *node)
 {
 	memset(node, 0, sizeof(*node));
 	node->vm_files = RB_ROOT;
-	mtx_init(&node->vm_lock, IPL_NONE);
+	rwlock_init(&node->vm_lock);
 }
 
 /**

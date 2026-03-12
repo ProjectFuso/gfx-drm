@@ -154,7 +154,7 @@ struct drm_fb_helper {
 	 * protect all helper internal state with this lock as well as reduce
 	 * core KMS locking as much as possible.
 	 */
-	struct rwlock lock;
+	struct mutex lock;
 
 	/**
 	 * @kernel_fb_list:

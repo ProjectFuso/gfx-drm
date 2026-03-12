@@ -180,14 +180,14 @@ struct drm_device {
 	 * TODO: This lock used to be the BKL of the DRM subsystem. Move the
 	 *       lock into i915, which is the only remaining user.
 	 */
-	struct rwlock struct_mutex;
+	struct mutex struct_mutex;
 
 	/**
 	 * @master_mutex:
 	 *
 	 * Lock for &drm_minor.master and &drm_file.is_master
 	 */
-	struct rwlock master_mutex;
+	struct mutex master_mutex;
 
 	/**
 	 * @open_count:
@@ -198,7 +198,7 @@ struct drm_device {
 	atomic_t open_count;
 
 	/** @filelist_mutex: Protects @filelist. */
-	struct rwlock filelist_mutex;
+	struct mutex filelist_mutex;
 	/**
 	 * @filelist:
 	 *
@@ -223,7 +223,7 @@ struct drm_device {
 	 *
 	 * Protects &clientlist access.
 	 */
-	struct rwlock clientlist_mutex;
+	struct mutex clientlist_mutex;
 
 	/**
 	 * @clientlist:
@@ -311,7 +311,7 @@ struct drm_device {
 	struct drm_mode_config mode_config;
 
 	/** @object_name_lock: GEM information */
-	struct rwlock object_name_lock;
+	struct mutex object_name_lock;
 
 	/** @object_name_idr: GEM information */
 	struct idr object_name_idr;

@@ -39,9 +39,6 @@
 #include <linux/dma-resv.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
-#ifndef __linux__
-#include <uvm/uvm_extern.h>	/* vm_prot_t, voff_t, vsize_t, struct uvm_object */
-#endif
 
 #include <drm/drm_vma_manager.h>
 
@@ -189,9 +186,7 @@ struct drm_gem_object_funcs {
 	 */
 #ifdef __linux__
 	int (*mmap)(struct drm_gem_object *obj, struct vm_area_struct *vma);
-#else
-	int (*mmap)(struct drm_gem_object *, vm_prot_t, voff_t, vsize_t);
-#endif /* __linux__ vs OpenBSD */
+#endif
 
 	/**
 	 * @evict:
@@ -256,7 +251,7 @@ struct drm_gem_lru {
 	 * LRUs that the object can move between should be protected
 	 * by the same lock.
 	 */
-	struct rwlock *lock;
+	struct mutex *lock;
 
 	/**
 	 * @count:
@@ -283,12 +278,6 @@ struct drm_gem_lru {
  * Buffer objects are often abbreviated to BO.
  */
 struct drm_gem_object {
-	/*
-	 * This must be first as uobj is cast to ttm_buffer_object for
-	 * radeon_ttm_fault() the first member of that struct is drm_gem_object
-	 */
-	struct uvm_object uobj;
-
 	/**
 	 * @refcount:
 	 *
@@ -571,7 +560,7 @@ void drm_gem_unlock_reservations(struct drm_gem_object **objs, int count,
 int drm_gem_dumb_map_offset(struct drm_file *file, struct drm_device *dev,
 			    u32 handle, u64 *offset);
 
-void drm_gem_lru_init(struct drm_gem_lru *lru, struct rwlock *lock);
+void drm_gem_lru_init(struct drm_gem_lru *lru, struct mutex *lock);
 void drm_gem_lru_remove(struct drm_gem_object *obj);
 void drm_gem_lru_move_tail_locked(struct drm_gem_lru *lru, struct drm_gem_object *obj);
 void drm_gem_lru_move_tail(struct drm_gem_lru *lru, struct drm_gem_object *obj);

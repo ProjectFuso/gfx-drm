@@ -203,7 +203,7 @@ void drm_sched_rq_update_fifo_locked(struct drm_sched_entity *entity, ktime_t ts
 static void drm_sched_rq_init(struct drm_gpu_scheduler *sched,
 			      struct drm_sched_rq *rq)
 {
-	mtx_init(&rq->lock, IPL_NONE);
+	spin_lock_init(&rq->lock);
 	INIT_LIST_HEAD(&rq->entities);
 	rq->rb_tree_root = RB_ROOT_CACHED;
 	rq->current_entity = NULL;
@@ -506,13 +506,11 @@ unsigned long drm_sched_suspend_timeout(struct drm_gpu_scheduler *sched)
 {
 	unsigned long sched_timeout, now = jiffies;
 
-#ifdef __linux__
-	sched_timeout = sched->work_tdr.timer.expires;
-#elif defined(__sun)
-	/* illumos Phase 1: callout_t has no exposed expiry; use 0 */
+#ifdef __sun
+	/* illumos Phase 1: callout_t has no exposed expiry */
 	sched_timeout = 0;
-#else	/* OpenBSD */
-	sched_timeout = sched->work_tdr.to.to_time;
+#else
+	sched_timeout = sched->work_tdr.timer.expires;
 #endif
 
 	/*
@@ -1320,7 +1318,7 @@ int drm_sched_init(struct drm_gpu_scheduler *sched,
 
 	init_waitqueue_head(&sched->job_scheduled);
 	INIT_LIST_HEAD(&sched->pending_list);
-	mtx_init(&sched->job_list_lock, IPL_NONE);
+	spin_lock_init(&sched->job_list_lock);
 	atomic_set(&sched->credit_count, 0);
 	INIT_DELAYED_WORK(&sched->work_tdr, drm_sched_job_timedout);
 	INIT_WORK(&sched->work_run_job, drm_sched_run_job_work);

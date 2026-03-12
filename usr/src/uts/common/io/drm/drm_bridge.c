@@ -205,7 +205,7 @@ static DRM_LIST_HEAD(bridge_list);
  */
 void drm_bridge_add(struct drm_bridge *bridge)
 {
-	drm_rw_init(&bridge->hpd_mutex, "brhpd");
+	mutex_init(&bridge->hpd_mutex);
 
 	mutex_lock(&bridge_lock);
 	list_add_tail(&bridge->list, &bridge_list);

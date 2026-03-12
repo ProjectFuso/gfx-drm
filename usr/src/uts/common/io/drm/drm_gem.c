@@ -255,7 +255,7 @@ drm_gem_init(struct drm_device *dev)
 {
 	struct drm_vma_offset_manager *vma_offset_manager;
 
-	drm_rw_init(&dev->object_name_lock, "drmonl");
+	mutex_init(&dev->object_name_lock);
 	idr_init_base(&dev->object_name_idr, 1);
 
 	vma_offset_manager = drmm_kzalloc(dev, sizeof(*vma_offset_manager),
@@ -349,9 +349,6 @@ void drm_gem_private_object_init(struct drm_device *dev,
 	obj->dev = dev;
 #ifdef __linux__
 	obj->filp = NULL;
-#else
-	obj->uao = NULL;
-	obj->uobj.pgops = NULL;
 #endif
 
 	kref_init(&obj->refcount);
@@ -1179,7 +1176,7 @@ void
 drm_gem_open(struct drm_device *dev, struct drm_file *file_private)
 {
 	idr_init_base(&file_private->object_idr, 1);
-	mtx_init(&file_private->table_lock, IPL_NONE);
+	spin_lock_init(&file_private->table_lock);
 }
 
 /**
@@ -1212,11 +1209,6 @@ drm_gem_object_release(struct drm_gem_object *obj)
 #ifdef __linux__
 	if (obj->filp)
 		fput(obj->filp);
-#else
-	if (obj->uao)
-		uao_detach(obj->uao);
-	if (obj->uobj.pgops)
-		uvm_obj_destroy(&obj->uobj);
 #endif
 
 	drm_gem_private_object_fini(obj);
@@ -1717,7 +1709,7 @@ EXPORT_SYMBOL(drm_gem_unlock_reservations);
  * @lock: The lock protecting the LRU
  */
 void
-drm_gem_lru_init(struct drm_gem_lru *lru, struct rwlock *lock)
+drm_gem_lru_init(struct drm_gem_lru *lru, struct mutex *lock)
 {
 	lru->lock = lock;
 	lru->count = 0;
