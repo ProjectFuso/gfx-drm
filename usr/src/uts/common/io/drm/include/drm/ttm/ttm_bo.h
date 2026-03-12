@@ -454,8 +454,7 @@ void ttm_mem_io_free(struct ttm_device *bdev,
 		     struct ttm_resource *mem);
 void ttm_move_memcpy(bool clear, u32 num_pages,
 		     struct ttm_kmap_iter *dst_iter,
-		     struct ttm_kmap_iter *src_iter,
-		     void *memt);	/* bus_space_tag_t: illumos stub */
+		     struct ttm_kmap_iter *src_iter);
 int ttm_bo_move_memcpy(struct ttm_buffer_object *bo,
 		       struct ttm_operation_ctx *ctx,
 		       struct ttm_resource *new_mem);
