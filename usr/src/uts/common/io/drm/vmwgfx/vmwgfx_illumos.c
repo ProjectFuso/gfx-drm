@@ -1078,6 +1078,56 @@ vmwgfx_cb_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
 	return (ret < 0 ? (int)-ret : 0);
 }
 
+// To Claude Code: I implemented this preliminary for you; please review
+// and fix this.
+static int
+vmwgfx_cb_chpoll(dev_t dev, short events, int anyyet, short *reventsp,
+		 struct pollhead **phpp)
+{
+  	struct vmwgfx_state *state;
+	struct vmwgfx_open *op;
+        struct drm_file *file_priv;
+	int slot, vis_ret;
+	short revents = 0;
+	long ret;
+
+	slot = VMWGFX_MINOR_SLOT(getminor(dev));
+	state = vmwgfx_global_state;
+
+	if (state == NULL || slot < 0 || slot >= VMWGFX_MAX_OPENS ||
+	    !state->opens[slot].in_use)
+		return (ENXIO);
+
+	op = &state->opens[slot];
+        file_priv = op->filp.private_data;
+        if (!file_priv)
+              return (EBADF);
+
+        if (!anyyet) {
+	  *phpp = &file_priv->drm_pollhead;
+        }
+
+        // *reventsp = drm_poll(file_priv, events); // signature mismatch
+
+	/* 2. Xorg only polls for incoming data (Read events) */
+	if (events & (POLLIN | POLLRDNORM)) {
+
+          /* Lock the event list just like the read() syscall would */
+          mutex_enter(&file_priv->event_read_lock);
+
+          /* 3. If the list has events, we have data ready to be read! */
+          if (!list_empty(&file_priv->event_list)) {
+            revents |= events & (POLLIN | POLLRDNORM);
+          }
+
+          mutex_exit(&file_priv->event_read_lock);
+	}
+
+	*reventsp = revents;
+
+        return (0);
+}
+
 static int
 vmwgfx_getinfo(dev_info_t *dip, ddi_info_cmd_t cmd, void *arg, void **result)
 {
@@ -1258,7 +1308,7 @@ static struct cb_ops vmwgfx_cb_ops = {
 	.cb_devmap	= vmwgfx_cb_devmap,
 	.cb_mmap	= nodev,
 	.cb_segmap	= ddi_devmap_segmap,	/* enables mmap via cb_devmap */
-	.cb_chpoll	= nochpoll,
+	.cb_chpoll	= vmwgfx_cb_chpoll,
 	.cb_prop_op	= ddi_prop_op,
 	.cb_str		= NULL,
 	.cb_flag	= D_NEW | D_MP,
