@@ -699,34 +699,41 @@ pci_release_region(struct pci_dev *pdev, int bar)
 
 /*
  * devm_ioremap / devm_memremap — device-managed MMIO mapping.
- * On illumos we use memremap from linux/io.h (which is a stub for now).
+ *
+ * On illumos, these call illumos_ioremap() which uses ddi_regs_map_setup()
+ * to map PCI BAR regions.  The physical address is matched against
+ * pdev->resource[] to determine the BAR index.
  */
 #include <linux/io.h>
+
+/* Implemented in vmwgfx/vmwgfx_illumos.c */
+extern void *illumos_ioremap(struct pci_dev *, resource_size_t, size_t);
+extern void  illumos_iounmap(struct pci_dev *, void *);
 
 static inline void *
 devm_ioremap(struct device *dev, resource_size_t offset, resource_size_t size)
 {
-	return memremap(offset, size, MEMREMAP_WB);
+	return illumos_ioremap(dev->pdev, offset, (size_t)size);
 }
 
 static inline void *
 devm_memremap(struct device *dev, resource_size_t offset, resource_size_t size,
     unsigned long flags)
 {
-	return memremap(offset, size, flags);
+	return illumos_ioremap(dev->pdev, offset, (size_t)size);
 }
 
 static inline void *
 devm_ioremap_wc(struct device *dev, resource_size_t offset,
     resource_size_t size)
 {
-	return memremap(offset, size, MEMREMAP_WB);
+	return illumos_ioremap(dev->pdev, offset, (size_t)size);
 }
 
 static inline void
 pci_iounmap(struct pci_dev *pdev, void __iomem *addr)
 {
-	memunmap(addr);
+	illumos_iounmap(pdev, (void *)addr);
 }
 
 #endif /* _LINUX_PCI_H_ */

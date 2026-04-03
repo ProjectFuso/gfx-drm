@@ -72,8 +72,18 @@ typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
 #define DRM_IOCTL_TYPE(n)              _IOC_TYPE(n)
 #define DRM_MAJOR       226
 #else
+#include <sys/ioccom.h>
+/* illumos ioccom.h lacks IOCGROUP and IOCPARM_LEN — define them here */
+#ifndef IOCGROUP
+#define IOCGROUP(n)		(((n) >> 8) & 0xff)
+#endif
+#ifndef IOCPARM_LEN
+#define IOCPARM_LEN(n)		(((n) >> 16) & IOCPARM_MASK)
+#endif
 #define DRM_IOCTL_NR(n)			((n) & 0xff)
-#define DRM_IOCTL_TYPE(n)              IOCGROUP(n)
+#define DRM_IOCTL_TYPE(n)		IOCGROUP(n)
+/* illumos: map Linux _IOC_SIZE to IOCPARM_LEN (same bit field, bits 16-28) */
+#define _IOC_SIZE(n)			IOCPARM_LEN(n)
 #endif
 
 /**

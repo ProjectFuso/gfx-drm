@@ -49,15 +49,120 @@
 #include "ttm_module.h"
 
 #ifdef __sun
-/* illumos Phase 1: stub out bus_dma-based TTM pool */
-int __ttm_pool_illumos_stub;
+/*
+ * illumos TTM pool implementation.
+ *
+ * Each TTM "page" is backed by a PAGE_SIZE kmem_alloc.  On x86 illumos,
+ * kmem_alloc(PAGE_SIZE, KM_SLEEP) returns page-aligned, physically
+ * contiguous kernel memory.  hat_getpfnum() gives the GPA, which is the
+ * DMA address the SVGA device needs for MOB page tables.
+ *
+ * We forward-declare hat_getpfnum / kas to avoid vm/hat.h → vm/page.h,
+ * which would conflict with our Linux-compat struct page.
+ * pfn_t and PFN_INVALID come from sys/types.h (already included via
+ * linux/gfp.h → sys/kmem.h → sys/types.h).
+ */
+struct hat;
+struct as;
+extern pfn_t hat_getpfnum(struct hat *, caddr_t);
+extern struct as kas;
 
-int  ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
-    struct ttm_operation_ctx *ctx) { (void)pool; (void)tt; (void)ctx; return -ENOMEM; }
+int
+ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+    struct ttm_operation_ctx *ctx)
+{
+	unsigned long i;
+	size_t total = (size_t)tt->num_pages << PAGE_SHIFT;
+	caddr_t kva;
+	ddi_umem_cookie_t cookie;
+
+	(void)pool; (void)ctx;
+
+	/*
+	 * Allocate all pages as a single ddi_umem region so they can be
+	 * mapped to userspace via devmap_umem_setup() in cb_devmap.
+	 * ddi_umem_alloc with DDI_UMEM_SLEEP allocates wired kernel pages.
+	 */
+	kva = ddi_umem_alloc(total, DDI_UMEM_SLEEP, &cookie);
+	if (kva == NULL)
+		return -ENOMEM;
+
+	bzero(kva, total);
+
+	tt->illumos_umem_kva    = kva;
+	tt->illumos_umem_cookie = cookie;
+
+	for (i = 0; i < tt->num_pages; i++) {
+		struct page *p;
+		caddr_t page_kva = kva + (i << PAGE_SHIFT);
+		pfn_t pfn;
+
+		p = kmem_zalloc(sizeof(*p), KM_SLEEP);
+		if (p == NULL)
+			goto fail;
+
+		INIT_LIST_HEAD(&p->lru);
+		p->kaddr = page_kva;
+		p->_refcount = 1;
+		tt->pages[i] = p;
+
+		if (tt->dma_address != NULL) {
+			pfn = hat_getpfnum(kas.a_hat, page_kva);
+			if (pfn == PFN_INVALID) {
+				kmem_free(p, sizeof(*p));
+				tt->pages[i] = NULL;
+				goto fail;
+			}
+			tt->dma_address[i] = (dma_addr_t)pfn << PAGE_SHIFT;
+		}
+	}
+
+	tt->page_flags |= TTM_TT_FLAG_PRIV_POPULATED;
+	return 0;
+
+fail:
+	for (i = 0; i < tt->num_pages; i++) {
+		if (tt->pages[i] != NULL) {
+			kmem_free(tt->pages[i], sizeof(struct page));
+			tt->pages[i] = NULL;
+		}
+		if (tt->dma_address != NULL)
+			tt->dma_address[i] = 0;
+	}
+	ddi_umem_free(cookie);
+	tt->illumos_umem_kva    = NULL;
+	tt->illumos_umem_cookie = NULL;
+	return -ENOMEM;
+}
 EXPORT_SYMBOL(ttm_pool_alloc);
 
-void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
-    { (void)pool; (void)tt; }
+void
+ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
+{
+	unsigned long i;
+
+	(void)pool;
+
+	if (!(tt->page_flags & TTM_TT_FLAG_PRIV_POPULATED))
+		return;
+
+	for (i = 0; i < tt->num_pages; i++) {
+		if (tt->pages[i] != NULL) {
+			kmem_free(tt->pages[i], sizeof(struct page));
+			tt->pages[i] = NULL;
+		}
+		if (tt->dma_address != NULL)
+			tt->dma_address[i] = 0;
+	}
+
+	if (tt->illumos_umem_kva != NULL) {
+		ddi_umem_free(tt->illumos_umem_cookie);
+		tt->illumos_umem_kva    = NULL;
+		tt->illumos_umem_cookie = NULL;
+	}
+
+	tt->page_flags &= ~TTM_TT_FLAG_PRIV_POPULATED;
+}
 EXPORT_SYMBOL(ttm_pool_free);
 
 void ttm_pool_init(struct ttm_pool *pool, struct device *dev,
@@ -71,6 +176,12 @@ EXPORT_SYMBOL(ttm_pool_fini);
 int  ttm_pool_debugfs(struct ttm_pool *pool, struct seq_file *m)
     { (void)pool; (void)m; return 0; }
 EXPORT_SYMBOL(ttm_pool_debugfs);
+
+int  ttm_pool_mgr_init(unsigned long num_pages) { (void)num_pages; return 0; }
+EXPORT_SYMBOL(ttm_pool_mgr_init);
+
+void ttm_pool_mgr_fini(void) {}
+EXPORT_SYMBOL(ttm_pool_mgr_fini);
 
 #else /* !__sun */
 

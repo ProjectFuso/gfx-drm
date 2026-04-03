@@ -23,6 +23,9 @@
  * Phase 1 stubs: kmap/vmap/page alloc, DMA-BUF, sync_file, ACPI, i2c.
  */
 
+/* Must come first to block vm/page.h before system headers pull it in */
+#include <linux/illumos_page_compat.h>
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/kmem.h>
@@ -627,27 +630,25 @@ __pagevec_release(struct pagevec *pvec)
 void *
 kmap(struct page *pg)
 {
-	/* Phase 1: not implemented */
-	return NULL;
+	return pg->kaddr;
 }
 
 void
 kunmap_va(void *addr)
 {
-	/* Phase 1: not implemented */
+	/* illumos: pages are always mapped in kernel; no-op */
 }
 
 void *
 kmap_atomic_prot(struct page *pg, pgprot_t prot)
 {
-	/* Phase 1: not implemented */
-	return NULL;
+	return pg->kaddr;
 }
 
 void
 kunmap_atomic(void *addr)
 {
-	/* Phase 1: not implemented */
+	/* illumos: pages are always mapped in kernel; no-op */
 }
 
 void *
@@ -863,6 +864,78 @@ idr_cmp(struct idr_entry *a, struct idr_entry *b)
 }
 
 SPLAY_GENERATE(idr_tree, idr_entry, entry, idr_cmp);
+
+int
+idr_for_each(struct idr *idr, int (*fn)(int, void *, void *), void *data)
+{
+	struct idr_entry *entry;
+	int ret;
+
+	SPLAY_FOREACH(entry, idr_tree, &idr->tree) {
+		ret = fn((int)entry->id, entry->ptr, data);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+/* ===== IDA — ID allocator (wraps IDR with a dummy pointer) ===== */
+/*
+ * We use idr_alloc with the pointer set to a non-NULL sentinel so the
+ * allocator can distinguish "in use" from "free".
+ */
+#define IDA_SENTINEL	((void *)1UL)
+
+void
+ida_init(struct ida *ida)
+{
+	idr_init(&ida->idr);
+}
+
+void
+ida_destroy(struct ida *ida)
+{
+	idr_destroy(&ida->idr);
+}
+
+int
+ida_alloc_range(struct ida *ida, unsigned int lo, unsigned int hi, gfp_t gfp)
+{
+	return idr_alloc(&ida->idr, IDA_SENTINEL, (int)lo, (int)hi + 1, gfp);
+}
+
+int
+ida_alloc_max(struct ida *ida, unsigned int max, gfp_t gfp)
+{
+	return ida_alloc_range(ida, 0, max, gfp);
+}
+
+int
+ida_alloc_min(struct ida *ida, unsigned int min, gfp_t gfp)
+{
+	return ida_alloc_range(ida, min, (unsigned int)INT_MAX, gfp);
+}
+
+int
+ida_simple_get(struct ida *ida, unsigned int start, unsigned int end,
+    gfp_t gfp)
+{
+	if (end == 0)
+		end = INT_MAX;
+	return ida_alloc_range(ida, start, end - 1, gfp);
+}
+
+void
+ida_free(struct ida *ida, unsigned int id)
+{
+	idr_remove(&ida->idr, id);
+}
+
+void
+ida_simple_remove(struct ida *ida, unsigned int id)
+{
+	ida_free(ida, id);
+}
 
 /* ===== XArray (splay tree, kmem_cache-backed) ===== */
 
@@ -2554,31 +2627,6 @@ sync_file_get_fence(int fd)
 	return NULL;
 }
 
-/* ===== fd_install / fput / get_unused_fd_flags / put_unused_fd (stubs) ===== */
-
-void
-fd_install(int fd, struct file *fp)
-{
-	/* Phase 1: stub */
-}
-
-void
-fput(struct file *fp)
-{
-	/* Phase 1: stub */
-}
-
-int
-get_unused_fd_flags(unsigned int flags)
-{
-	return -1;
-}
-
-void
-put_unused_fd(int fd)
-{
-}
-
 /* ===== memremap / memunmap ===== */
 
 void *
@@ -2643,6 +2691,32 @@ dma_map_resource(struct device *dev, phys_addr_t phys_addr, size_t size,
     enum dma_data_direction dir, u_long attr)
 {
 	return (dma_addr_t)phys_addr; /* identity map for Phase 1 */
+}
+
+/* Phase 1 stub: DMA-map a scatter-gather table (no IOMMU) */
+int
+dma_map_sgtable(struct device *dev, struct sg_table *sgt,
+    enum dma_data_direction dir, u_long attrs)
+{
+	struct scatterlist *sg;
+	unsigned int i;
+
+	for_each_sg(sgt->sgl, sg, sgt->orig_nents, i) {
+		if (sg->__page != NULL)
+			sg->dma_address =
+			    (dma_addr_t)(uintptr_t)sg->__page;
+		else
+			sg->dma_address = 0;
+	}
+	sgt->nents = sgt->orig_nents;
+	return 0;
+}
+
+void
+dma_unmap_sgtable(struct device *dev, struct sg_table *sgt,
+    enum dma_data_direction dir, u_long attrs)
+{
+	/* Phase 1 stub: no IOMMU teardown needed */
 }
 
 /* ===== IOMMU (Phase 1 stubs) ===== */
@@ -2946,3 +3020,30 @@ drm_linux_exit(void)
 	taskq_destroy((taskq_t *)system_highpri_wq);
 	taskq_destroy((taskq_t *)system_wq);
 }
+
+/*
+ * drm_fbdev_client_setup — Phase 1 stub.
+ * drm_fbdev_client.c is excluded from compilation because it doesn't
+ * pull in generated/autoconf.h.  Provide a no-op so the linker is
+ * satisfied; fbdev emulation is not needed to load/attach the driver.
+ */
+#include <drm/drm_fbdev_client.h>
+int
+drm_fbdev_client_setup(struct drm_device *dev,
+    const struct drm_format_info *format)
+{
+	(void)dev; (void)format;
+	return 0;
+}
+
+/*
+ * kfpu_begin / kfpu_end — kernel FPU save/restore.
+ * These are declared extern in asm/fpu/api.h and used by drm_cache.c
+ * for MOVNTDQA-based WC memcpy.  On this illumos kernel the symbols
+ * are not exported from unix; provide no-op stubs for Phase 1.
+ * The MOVNTDQA path is guarded by a runtime CPU-feature check, so it
+ * will only execute if the stubs are actually reached on a system that
+ * has SSE4.1 — acceptable risk for development.
+ */
+void kfpu_begin(void) {}
+void kfpu_end(void) {}

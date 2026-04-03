@@ -36,6 +36,9 @@
 #include <linux/interrupt.h>
 #include <linux/mm.h>
 #include <linux/uaccess.h>
+#ifndef __linux__
+#include <linux/io.h>	/* outl/inl Linux-convention overrides */
+#endif
 
 #include <drm/drm_auth.h>
 #include <drm/drm_device.h>

@@ -743,15 +743,9 @@ static const struct drm_ioctl_desc drm_ioctls[] = {
 long drm_ioctl_kernel(struct file *file, drm_ioctl_t *func, void *kdata,
 		      u32 flags)
 {
-	STUB();
-	return -ENOSYS;
-#ifdef __linux__
 	struct drm_file *file_priv = file->private_data;
 	struct drm_device *dev = file_priv->minor->dev;
 	int ret;
-
-	/* Update drm_file owner if fd was passed along. */
-	drm_file_update_pid(file_priv);
 
 	if (drm_dev_is_unplugged(dev))
 		return -ENODEV;
@@ -780,9 +774,6 @@ EXPORT_SYMBOL(drm_ioctl_kernel);
 long drm_ioctl(struct file *filp,
 	      unsigned int cmd, unsigned long arg)
 {
-	STUB();
-	return -ENOSYS;
-#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_device *dev;
 	const struct drm_ioctl_desc *ioctl = NULL;
@@ -828,9 +819,8 @@ long drm_ioctl(struct file *filp,
 		out_size = 0;
 	ksize = max(max(in_size, out_size), drv_size);
 
-	drm_dbg_core(dev, "comm=\"%s\" pid=%d, dev=0x%lx, auth=%d, %s\n",
-		     current->comm, task_pid_nr(current),
-		     (long)old_encode_dev(file_priv->minor->kdev->devt),
+	drm_dbg_core(dev, "pid=%d, auth=%d, %s\n",
+		     task_pid_nr(current),
 		     file_priv->authenticated, ioctl->name);
 
 	/* Do not trust userspace, use our own definition */
@@ -867,19 +857,16 @@ long drm_ioctl(struct file *filp,
       err_i1:
 	if (!ioctl)
 		drm_dbg_core(dev,
-			     "invalid ioctl: comm=\"%s\", pid=%d, dev=0x%lx, auth=%d, cmd=0x%02x, nr=0x%02x\n",
-			     current->comm, task_pid_nr(current),
-			     (long)old_encode_dev(file_priv->minor->kdev->devt),
+			     "invalid ioctl: pid=%d, auth=%d, cmd=0x%02x, nr=0x%02x\n",
+			     task_pid_nr(current),
 			     file_priv->authenticated, cmd, nr);
 
 	if (kdata != stack_kdata)
 		kfree(kdata);
 	if (retcode)
-		drm_dbg_core(dev, "comm=\"%s\", pid=%d, ret=%d\n",
-			     current->comm, task_pid_nr(current), retcode);
+		drm_dbg_core(dev, "pid=%d, ret=%d\n",
+			     task_pid_nr(current), retcode);
 	return retcode;
-#endif
-#endif
 }
 EXPORT_SYMBOL(drm_ioctl);
 

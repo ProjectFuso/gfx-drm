@@ -613,6 +613,10 @@ static void drm_dev_init_release(struct drm_device *dev, void *res)
 	drm_fs_inode_free(dev->anon_inode);
 
 	put_device(dev->dev);
+#else
+	/* illumos: free the stub inode we allocated */
+	kfree(dev->anon_inode);
+	dev->anon_inode = NULL;
 #endif
 	/* Prevent use-after-free in drm_managed_release when debugging is
 	 * enabled. Slightly awkward, but can't really be helped. */
@@ -768,6 +772,80 @@ void *__devm_drm_dev_alloc(struct device *parent,
 		return ERR_PTR(ret);
 	}
 	drmm_add_final_kfree(drm, container);
+#else
+	/*
+	 * illumos Phase 1: minimal drm_device initialization.
+	 * Linux's drm_dev_init() is gated on __linux__ because it sets up
+	 * VFS anonymous inodes and device_fs which don't exist here.
+	 * We still need the critical fields that the driver depends on,
+	 * especially drm->dev (used by to_pci_dev() in every PCI driver).
+	 */
+	kref_init(&drm->ref);
+	drm->dev = parent;
+	drm->driver = driver;
+	drm->driver_features = ~0u;
+
+	INIT_LIST_HEAD(&drm->managed.resources);
+	spin_lock_init(&drm->managed.lock);
+
+	INIT_LIST_HEAD(&drm->filelist);
+	INIT_LIST_HEAD(&drm->filelist_internal);
+	INIT_LIST_HEAD(&drm->clientlist);
+	INIT_LIST_HEAD(&drm->vblank_event_list);
+
+	spin_lock_init(&drm->event_lock);
+	mutex_init(&drm->struct_mutex);
+	mutex_init(&drm->filelist_mutex);
+	mutex_init(&drm->clientlist_mutex);
+	mutex_init(&drm->master_mutex);
+
+	/*
+	 * Allocate a minimal inode stub so that driver code accessing
+	 * drm->anon_inode->i_mapping does not dereference NULL.
+	 */
+	{
+		struct inode *inode = kzalloc(sizeof(struct inode), GFP_KERNEL);
+		if (inode != NULL)
+			inode->i_mapping = &inode->i_data;
+		drm->anon_inode = inode;
+	}
+
+	/* Register managed teardown (mirrors drm_dev_init_release on Linux). */
+	if (drmm_add_action_or_reset(drm, drm_dev_init_release, NULL) != 0) {
+		kfree(container);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	/*
+	 * Initialize the GEM subsystem if the driver uses it.  This sets up
+	 * drm->vma_offset_manager, required by ttm_device_init(), and
+	 * drm->object_name_idr / drm->object_name_lock.
+	 */
+	if (drm_core_check_feature(drm, DRIVER_GEM)) {
+		if (drm_gem_init(drm) != 0) {
+			drm_managed_release(drm);
+			kfree(container);
+			return ERR_PTR(-ENOMEM);
+		}
+	}
+
+	/*
+	 * Allocate primary (and render if supported) minors so that
+	 * drm_dev_register()'s DRM_INFO print of minor->index does not
+	 * dereference NULL.
+	 */
+	if (drm_core_check_feature(drm, DRIVER_RENDER)) {
+		if (drm_minor_alloc(drm, DRM_MINOR_RENDER) != 0) {
+			drm_managed_release(drm);
+			kfree(container);
+			return ERR_PTR(-ENOMEM);
+		}
+	}
+	if (drm_minor_alloc(drm, DRM_MINOR_PRIMARY) != 0) {
+		drm_managed_release(drm);
+		kfree(container);
+		return ERR_PTR(-ENOMEM);
+	}
 #endif
 
 	return container;

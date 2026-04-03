@@ -30,6 +30,12 @@
 
 #include "vmwgfx_drv.h"
 
+#ifndef __linux__
+/* Implemented in vmwgfx_illumos.c */
+extern int  illumos_vmw_irq_install(struct vmw_private *dev_priv);
+extern void illumos_vmw_irq_uninstall(struct vmw_private *dev_priv);
+#endif
+
 #define VMW_FENCE_WRAP (1 << 24)
 
 static u32 vmw_irqflag_fence_goal(struct vmw_private *vmw)
@@ -51,7 +57,10 @@ static u32 vmw_irqflag_fence_goal(struct vmw_private *vmw)
  * vmw_irq_handler has returned with IRQ_WAKE_THREAD.
  *
  */
-static irqreturn_t vmw_thread_fn(int irq, void *arg)
+#ifdef __linux__
+static
+#endif
+irqreturn_t vmw_thread_fn(int irq, void *arg)
 {
 	struct drm_device *dev = (struct drm_device *)arg;
 	struct vmw_private *dev_priv = vmw_priv(dev);
@@ -84,7 +93,10 @@ static irqreturn_t vmw_thread_fn(int irq, void *arg)
  * flags and also reasonably quick actions like waking processes waiting for
  * FIFO space. Other IRQ actions are deferred to the IRQ thread.
  */
-static irqreturn_t vmw_irq_handler(int irq, void *arg)
+#ifdef __linux__
+static
+#endif
+irqreturn_t vmw_irq_handler(int irq, void *arg)
 {
 	struct drm_device *dev = (struct drm_device *)arg;
 	struct vmw_private *dev_priv = vmw_priv(dev);
@@ -298,9 +310,7 @@ static void vmw_irq_preinstall(struct drm_device *dev)
 void vmw_irq_uninstall(struct drm_device *dev)
 {
 	struct vmw_private *dev_priv = vmw_priv(dev);
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	uint32_t status;
-	u32 i;
 
 	if (!(dev_priv->capabilities & SVGA_CAP_IRQMASK))
 		return;
@@ -310,11 +320,18 @@ void vmw_irq_uninstall(struct drm_device *dev)
 	status = vmw_irq_status_read(dev_priv);
 	vmw_irq_status_write(dev_priv, status);
 
-	for (i = 0; i < dev_priv->num_irq_vectors; ++i)
-		free_irq(dev_priv->irqs[i], dev);
-
-	pci_free_irq_vectors(pdev);
-	dev_priv->num_irq_vectors = 0;
+#ifdef __linux__
+	{
+		struct pci_dev *pdev = to_pci_dev(dev->dev);
+		u32 i;
+		for (i = 0; i < dev_priv->num_irq_vectors; ++i)
+			free_irq(dev_priv->irqs[i], dev);
+		pci_free_irq_vectors(pdev);
+		dev_priv->num_irq_vectors = 0;
+	}
+#else
+	illumos_vmw_irq_uninstall(dev_priv);
+#endif
 }
 
 /**
@@ -325,6 +342,14 @@ void vmw_irq_uninstall(struct drm_device *dev)
  */
 int vmw_irq_install(struct vmw_private *dev_priv)
 {
+#ifndef __linux__
+	/*
+	 * illumos: delegate to DDI interrupt implementation in
+	 * vmwgfx_illumos.c, which uses ddi_intr_alloc/enable.
+	 */
+	vmw_irq_preinstall(&dev_priv->drm);
+	return illumos_vmw_irq_install(dev_priv);
+#else
 	struct pci_dev *pdev = to_pci_dev(dev_priv->drm.dev);
 	struct drm_device *dev = &dev_priv->drm;
 	int ret;
@@ -355,8 +380,9 @@ int vmw_irq_install(struct vmw_private *dev_priv)
 		}
 		dev_priv->irqs[i] = ret;
 
-		ret = request_threaded_irq(dev_priv->irqs[i], vmw_irq_handler, vmw_thread_fn,
-					   IRQF_SHARED, VMWGFX_DRIVER_NAME, dev);
+		ret = request_threaded_irq(dev_priv->irqs[i], vmw_irq_handler,
+					   vmw_thread_fn, IRQF_SHARED,
+					   VMWGFX_DRIVER_NAME, dev);
 		if (ret != 0) {
 			drm_err(&dev_priv->drm,
 				"Failed installing irq(%d): %d\n",
@@ -368,4 +394,5 @@ int vmw_irq_install(struct vmw_private *dev_priv)
 done:
 	dev_priv->num_irq_vectors = i;
 	return ret;
+#endif
 }

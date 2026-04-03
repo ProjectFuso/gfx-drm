@@ -32,6 +32,12 @@
 #include <drm/ttm/ttm_caching.h>
 #include <drm/ttm/ttm_kmap_iter.h>
 
+#ifndef __linux__
+/* ddi_umem_cookie_t is a pointer type (opaque); include the minimal header */
+#include <sys/ddi.h>
+#include <sys/sunddi.h>
+#endif
+
 struct ttm_device;
 struct ttm_tt;
 struct ttm_resource;
@@ -46,6 +52,17 @@ struct ttm_operation_ctx;
 struct ttm_tt {
 	/** @pages: Array of pages backing the data. */
 	struct page **pages;
+
+#ifndef __linux__
+	/**
+	 * @illumos_umem_cookie: DDI umem cookie for the entire page array.
+	 * Used by the illumos devmap path to mmap TTM pages to userspace.
+	 * Set by ttm_pool_alloc, cleared by ttm_pool_free.
+	 */
+	ddi_umem_cookie_t illumos_umem_cookie;
+	/** @illumos_umem_kva: Kernel VA returned by ddi_umem_alloc. */
+	caddr_t illumos_umem_kva;
+#endif
 	/**
 	 * @page_flags: The page flags.
 	 *

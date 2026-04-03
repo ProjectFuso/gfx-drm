@@ -349,9 +349,55 @@ vm_fault_t ttm_bo_vm_fault(struct vm_fault *vmf)
 }
 EXPORT_SYMBOL(ttm_bo_vm_fault);
 
-#else /* __sun */
-/* illumos: no UVM fault handling — mmap via seg_drm (Phase 2) */
-int __ttm_bo_vm_illumos_stub;
+#else /* !__linux__ */
+/*
+ * illumos Phase 1 stubs: mmap / page-fault callbacks not yet wired to
+ * the illumos VM subsystem.  They keep the driver loadable.
+ */
+void
+ttm_bo_vm_open(struct vm_area_struct *vma)
+{
+	struct ttm_buffer_object *bo = vma->vm_private_data;
+
+	ttm_bo_get(bo);
+}
+EXPORT_SYMBOL(ttm_bo_vm_open);
+
+void
+ttm_bo_vm_close(struct vm_area_struct *vma)
+{
+	struct ttm_buffer_object *bo = vma->vm_private_data;
+
+	ttm_bo_put(bo);
+}
+EXPORT_SYMBOL(ttm_bo_vm_close);
+
+vm_fault_t
+ttm_bo_vm_reserve(struct ttm_buffer_object *bo, struct vm_fault *vmf)
+{
+	(void)vmf;
+	if (!dma_resv_trylock(bo->base.resv))
+		return VM_FAULT_NOPAGE;
+	return 0;
+}
+EXPORT_SYMBOL(ttm_bo_vm_reserve);
+
+vm_fault_t
+ttm_bo_vm_fault_reserved(struct vm_fault *vmf, pgprot_t prot,
+    pgoff_t num_prefault)
+{
+	(void)vmf; (void)prot; (void)num_prefault;
+	return VM_FAULT_SIGBUS;
+}
+EXPORT_SYMBOL(ttm_bo_vm_fault_reserved);
+
+/* Stub vm_operations_struct used by ttm_bo_mmap_obj on non-Linux */
+const struct vm_operations_struct ttm_bo_vm_ops = {
+	.open	= ttm_bo_vm_open,
+	.close	= ttm_bo_vm_close,
+	.fault	= NULL,		/* no fault handler in Phase 1 */
+};
+EXPORT_SYMBOL(ttm_bo_vm_ops);
 #endif /* !__linux__ */
 
 /**

@@ -269,8 +269,6 @@ void drm_file_free(struct drm_file *file)
 	kfree(file);
 }
 
-#ifdef __linux__
-
 static void drm_close_helper(struct file *filp)
 {
 	struct drm_file *file_priv = filp->private_data;
@@ -322,8 +320,8 @@ int drm_open_helper(struct file *filp, struct drm_minor *minor)
 	if (WARN_ON_ONCE(!(filp->f_op->fop_flags & FOP_UNSIGNED_OFFSET)))
 		return -EINVAL;
 
-	drm_dbg_core(dev, "comm=\"%s\", pid=%d, minor=%d\n",
-		     current->comm, task_pid_nr(current), minor->index);
+	drm_dbg_core(dev, "pid=%d, minor=%d\n",
+		     task_pid_nr(current), minor->index);
 
 	priv = drm_file_alloc(minor);
 	if (IS_ERR(priv))
@@ -346,8 +344,6 @@ int drm_open_helper(struct file *filp, struct drm_minor *minor)
 
 	return 0;
 }
-
-#endif /* __linux__ */
 
 /**
  * drm_open - open method for DRM file
@@ -423,9 +419,6 @@ void drm_lastclose(struct drm_device *dev)
  */
 int drm_release(struct inode *inode, struct file *filp)
 {
-	STUB();
-	return -ENOSYS;
-#ifdef __linux__
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_minor *minor = file_priv->minor;
 	struct drm_device *dev = minor->dev;
@@ -446,7 +439,6 @@ int drm_release(struct inode *inode, struct file *filp)
 	drm_minor_release(minor);
 
 	return 0;
-#endif
 }
 EXPORT_SYMBOL(drm_release);
 

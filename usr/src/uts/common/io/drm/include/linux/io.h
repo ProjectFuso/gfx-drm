@@ -120,4 +120,34 @@ IOMEM_ERR_PTR(long error)
 void	*memremap(phys_addr_t, size_t, int);
 void	memunmap(void *);
 
+/*
+ * illumos exports outl(port, value) / inl(port) — opposite of Linux convention
+ * outl(value, port) / inl(port).  Override with inline asm using Linux order.
+ */
+#ifdef outl
+#undef outl
+#endif
+#ifdef outw
+#undef outw
+#endif
+#ifdef outb
+#undef outb
+#endif
+#ifdef inl
+#undef inl
+#endif
+#ifdef inw
+#undef inw
+#endif
+#ifdef inb
+#undef inb
+#endif
+
+#define outl(val, port)  __asm__ volatile("outl %0,%w1" : : "a"((uint32_t)(val)), "Nd"((uint16_t)(port)))
+#define outw(val, port)  __asm__ volatile("outw %0,%w1" : : "a"((uint16_t)(val)), "Nd"((uint16_t)(port)))
+#define outb(val, port)  __asm__ volatile("outb %0,%w1" : : "a"((uint8_t)(val)),  "Nd"((uint16_t)(port)))
+#define inl(port)  ({ uint32_t _v; __asm__ volatile("inl %w1,%0" : "=a"(_v) : "Nd"((uint16_t)(port))); _v; })
+#define inw(port)  ({ uint16_t _v; __asm__ volatile("inw %w1,%0" : "=a"(_v) : "Nd"((uint16_t)(port))); _v; })
+#define inb(port)  ({ uint8_t  _v; __asm__ volatile("inb %w1,%0" : "=a"(_v) : "Nd"((uint16_t)(port))); _v; })
+
 #endif

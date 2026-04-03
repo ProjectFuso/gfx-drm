@@ -6,6 +6,7 @@
 #include <drm/drm_gem.h>
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/ttm/ttm_bo.h>
+#include <drm/drm_file.h>
 
 int
 drm_gem_ttm_mmap(struct drm_gem_object *gem_obj, struct vm_area_struct *vma)
@@ -38,4 +39,17 @@ drm_gem_ttm_vunmap(struct drm_gem_object *obj, struct iosys_map *ism)
 	    container_of(obj, struct ttm_buffer_object, base);
 
 	ttm_bo_vunmap(tbo, ism);
+}
+
+/*
+ * drm_gem_ttm_dumb_map_offset - mmap offset for dumb buffers (Phase 1 stub)
+ *
+ * Returns -ENOSYS; full implementation requires drm_vma_node infrastructure.
+ */
+int
+drm_gem_ttm_dumb_map_offset(struct drm_file *file, struct drm_device *dev,
+    uint32_t handle, uint64_t *offset)
+{
+	(void)file; (void)dev; (void)handle; (void)offset;
+	return -ENOSYS;
 }

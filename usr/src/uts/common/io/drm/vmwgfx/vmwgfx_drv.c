@@ -670,12 +670,19 @@ static int vmw_dma_select_mode(struct vmw_private *dev_priv)
 	 * otherwise ttm tt pool pages will bounce through swiotlb running
 	 * out of available space.
 	 */
+#ifndef __linux__
+	/* illumos: SG DMA mapping is not implemented; use coherent mode which
+	 * uses the dma_address[] array populated via hat_getpfnum in
+	 * ttm_pool_alloc. */
+	dev_priv->map_mode = vmw_dma_alloc_coherent;
+#else
 	if (vmw_force_coherent || cc_platform_has(CC_ATTR_MEM_ENCRYPT))
 		dev_priv->map_mode = vmw_dma_alloc_coherent;
 	else if (vmw_restrict_iommu)
 		dev_priv->map_mode = vmw_dma_map_bind;
 	else
 		dev_priv->map_mode = vmw_dma_map_populate;
+#endif
 
 	drm_info(&dev_priv->drm,
 		 "DMA map mode: %s\n", names[dev_priv->map_mode]);
@@ -1252,6 +1259,7 @@ out_no_tfile:
 	return ret;
 }
 
+#ifdef __linux__
 static long vmw_generic_ioctl(struct file *filp, unsigned int cmd,
 			      unsigned long arg,
 			      long (*ioctl_func)(struct file *, unsigned int,
@@ -1308,6 +1316,7 @@ static long vmw_compat_ioctl(struct file *filp, unsigned int cmd,
 	return vmw_generic_ioctl(filp, cmd, arg, &drm_compat_ioctl);
 }
 #endif
+#endif /* __linux__ */
 
 static void vmw_master_set(struct drm_device *dev,
 			   struct drm_file *file_priv,
@@ -1594,6 +1603,7 @@ static const struct dev_pm_ops vmw_pm_ops = {
 	.resume = vmw_pm_resume,
 };
 
+#ifdef __linux__
 static const struct file_operations vmwgfx_driver_fops = {
 	.owner = THIS_MODULE,
 	.open = drm_open,
@@ -1608,6 +1618,7 @@ static const struct file_operations vmwgfx_driver_fops = {
 	.llseek = noop_llseek,
 	.fop_flags = FOP_UNSIGNED_OFFSET,
 };
+#endif /* __linux__ */
 
 static const struct drm_driver driver = {
 	.driver_features =
@@ -1626,7 +1637,9 @@ static const struct drm_driver driver = {
 	.prime_handle_to_fd = vmw_prime_handle_to_fd,
 	.gem_prime_import_sg_table = vmw_prime_import_sg_table,
 
+#ifdef __linux__
 	.fops = &vmwgfx_driver_fops,
+#endif
 	.name = VMWGFX_DRIVER_NAME,
 	.desc = VMWGFX_DRIVER_DESC,
 	.date = VMWGFX_DRIVER_DATE,
@@ -1635,7 +1648,7 @@ static const struct drm_driver driver = {
 	.patchlevel = VMWGFX_DRIVER_PATCHLEVEL
 };
 
-static struct pci_driver vmw_pci_driver = {
+struct pci_driver vmw_pci_driver = {
 	.name = VMWGFX_DRIVER_NAME,
 	.id_table = vmw_pci_id_list,
 	.probe = vmw_probe,
@@ -1677,7 +1690,28 @@ static int vmw_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	vmw_fifo_resource_inc(vmw);
 	vmw_svga_enable(vmw);
+#ifdef __linux__
 	drm_fbdev_ttm_setup(&vmw->drm,  0);
+#else
+	/*
+	 * illumos: no fbdev layer, so nothing triggers the initial KMS
+	 * modeset that writes SVGA_REG_WIDTH/HEIGHT/BITS_PER_PIXEL.
+	 * Write these registers directly so the VM display switches to
+	 * accelerated mode at the native resolution instead of staying
+	 * black.  Use the depth the host already reports for BPP=32 to
+	 * satisfy vmw_kms_write_svga's consistency check.
+	 */
+	{
+		unsigned int depth = vmw_read(vmw, SVGA_REG_DEPTH);
+		int wret = vmw_kms_write_svga(vmw,
+		    vmw->initial_width, vmw->initial_height,
+		    vmw->initial_width * 4,	/* stride: 4 bytes/pixel */
+		    32, depth ? depth : 24);
+		drm_info(&vmw->drm,
+		    "illumos initial display: %ux%u depth=%u ret=%d\n",
+		    vmw->initial_width, vmw->initial_height, depth, wret);
+	}
+#endif
 
 	vmw_debugfs_gem_init(vmw);
 	vmw_debugfs_resource_managers_init(vmw);

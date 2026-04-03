@@ -36,16 +36,20 @@ struct inode {
 	umode_t			i_mode;
 };
 
+struct file_operations;		/* forward decl — defined below */
+
 /*
  * struct file — Linux kernel file descriptor stub.
  * vmwgfx uses filp->private_data to get drm_file.
  */
 struct file {
-	void			*private_data;
-	struct dentry		*f_dentry;
-	unsigned int		f_flags;
-	loff_t			f_pos;
-	atomic_long_t		f_count;
+	void					*private_data;
+	struct dentry				*f_dentry;
+	unsigned int				 f_flags;
+	loff_t					 f_pos;
+	atomic_long_t				 f_count;
+	struct address_space			*f_mapping;
+	const struct file_operations		*f_op;
 };
 
 struct poll_table_struct;

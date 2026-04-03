@@ -44,7 +44,7 @@
 #define offset_in_page(off)	((uintptr_t)(off) & PAGE_MASK)
 #define set_page_dirty(page)	do { (void)(page); } while (0)
 
-#define PAGE_ALIGN(addr)	(((addr) + PAGE_MASK) & ~PAGE_MASK)
+#define PAGE_ALIGN(addr)	(((addr) + (PAGE_SIZE - 1)) & PAGE_MASK)
 
 #define PFN_UP(x)		(((x) + PAGE_SIZE-1) >> PAGE_SHIFT)
 #define PFN_DOWN(x)		((x) >> PAGE_SHIFT)

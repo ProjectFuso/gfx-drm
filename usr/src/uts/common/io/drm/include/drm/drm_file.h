@@ -47,6 +47,7 @@ struct drm_file;
 struct drm_device;
 struct drm_printer;
 struct device;
+struct inode;
 struct file;
 struct seq_file;
 

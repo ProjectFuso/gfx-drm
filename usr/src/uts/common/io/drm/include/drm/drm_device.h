@@ -204,11 +204,7 @@ struct drm_device {
 	 *
 	 * List of userspace clients, linked through &drm_file.lhead.
 	 */
-#ifdef __linux__
 	struct list_head filelist;
-#else
-	SPLAY_HEAD(drm_file_tree, drm_file)	files;
-#endif
 
 	/**
 	 * @filelist_internal:
