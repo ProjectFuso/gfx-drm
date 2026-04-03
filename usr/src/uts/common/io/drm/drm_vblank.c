@@ -1693,10 +1693,16 @@ static int drm_queue_vblank_event(struct drm_device *dev, unsigned int pipe,
 	if (drm_vblank_passed(seq, req_seq)) {
 		drm_vblank_put(dev, pipe);
 		send_vblank_event(dev, e, seq, now);
+#ifdef __sun
+	  pollwakeup(&file_priv->drm_pollhead, POLLIN | POLLRDNORM);
+#endif
 		vblwait->reply.sequence = seq;
 	} else {
 		/* drm_handle_vblank_events will call drm_vblank_put */
 		list_add_tail(&e->base.link, &dev->vblank_event_list);
+#ifdef __sun
+	  pollwakeup(&file_priv->drm_pollhead, POLLIN | POLLRDNORM);
+#endif
 		vblwait->reply.sequence = req_seq;
 	}
 

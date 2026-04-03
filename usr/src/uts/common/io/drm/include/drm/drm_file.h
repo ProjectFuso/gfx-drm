@@ -401,9 +401,8 @@ struct drm_file {
 	 */
 	struct drm_prime_file_private prime;
 
-#ifdef __OpenBSD__
-	struct selinfo rsel;
-	SPLAY_ENTRY(drm_file) link;
+#ifdef __sun
+        struct pollhead drm_pollhead;
 #endif
 };
 
