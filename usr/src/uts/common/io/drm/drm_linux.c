@@ -2654,12 +2654,40 @@ kfree_const(const void *addr)
  * Phase 1: Use plain kmem_zalloc and a fake DMA address.
  * Full implementation requires ddi_dma_mem_alloc.
  */
+/*
+ * hat_getpfnum / kas — forward-declared to avoid vm/hat.h conflicts.
+ * Used to translate kernel VA → physical (bus) address for DMA.
+ */
+struct hat;
+struct as;
+extern pfn_t hat_getpfnum(struct hat *, caddr_t);
+extern struct as kas;
+
 void *
 dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,
     int gfp)
 {
-	void *mem = kmem_zalloc(size, KM_SLEEP);
-	*dma_handle = (dma_addr_t)((uintptr_t)mem); /* fake: use VA as PA */
+	void *mem;
+	pfn_t pfn;
+
+	/*
+	 * kmem_zalloc with KM_SLEEP returns page-aligned, physically
+	 * contiguous memory for sizes up to a few MB (which covers all
+	 * current callers — command buffer pool, etc.).
+	 *
+	 * Compute the physical address via hat_getpfnum so the device can
+	 * DMA-read the allocation.  The kernel VA → PA translation is
+	 * required because the illumos kernel is mapped at a high virtual
+	 * address (PA != VA).
+	 */
+	mem = kmem_zalloc(size, KM_SLEEP);
+	if (mem == NULL) {
+		*dma_handle = 0;
+		return NULL;
+	}
+	pfn = hat_getpfnum(kas.a_hat, (caddr_t)mem);
+	*dma_handle = ((dma_addr_t)pfn << PAGE_SHIFT) |
+	    ((uintptr_t)mem & (PAGE_SIZE - 1));
 	return mem;
 }
 

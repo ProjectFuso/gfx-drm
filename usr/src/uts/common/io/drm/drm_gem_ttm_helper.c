@@ -42,14 +42,15 @@ drm_gem_ttm_vunmap(struct drm_gem_object *obj, struct iosys_map *ism)
 }
 
 /*
- * drm_gem_ttm_dumb_map_offset - mmap offset for dumb buffers (Phase 1 stub)
+ * drm_gem_ttm_dumb_map_offset - mmap offset for dumb buffers
  *
- * Returns -ENOSYS; full implementation requires drm_vma_node infrastructure.
+ * Registers the GEM object in the VMA offset manager and returns the
+ * offset to pass to mmap(). Delegates to drm_gem_dumb_map_offset which
+ * calls drm_gem_create_mmap_offset internally.
  */
 int
 drm_gem_ttm_dumb_map_offset(struct drm_file *file, struct drm_device *dev,
     uint32_t handle, uint64_t *offset)
 {
-	(void)file; (void)dev; (void)handle; (void)offset;
-	return -ENOSYS;
+	return drm_gem_dumb_map_offset(file, dev, handle, offset);
 }
