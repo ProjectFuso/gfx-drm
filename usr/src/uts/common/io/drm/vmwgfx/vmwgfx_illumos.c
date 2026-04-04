@@ -154,19 +154,6 @@ vmwgfx_read_pci_bars(struct pci_dev *pdev, ddi_acc_handle_t cfg_handle)
 	}
 }
 
-/*
- * IRQ state — tracks the DDI interrupt handle and Linux handler pointers
- * so the DDI hard-IRQ callback can dispatch to the driver's handlers.
- */
-struct vmwgfx_irq_state {
-	ddi_intr_handle_t	intr_hdl;	/* DDI interrupt handle */
-	irq_handler_t		handler;	/* hard-IRQ handler (vmw_irq_handler) */
-	irq_handler_t		thread_fn;	/* deferred handler (vmw_thread_fn) */
-	void			*dev_id;	/* opaque arg passed to handlers */
-	taskq_t			*tq;		/* taskq for thread_fn dispatch */
-	boolean_t		registered;
-};
-
 #define	VMWGFX_MINOR_SLOT(m)		((int)((m) & 0x3f))
 
 /* VIS identifier string returned to the terminal emulator */
@@ -188,7 +175,7 @@ struct vmwgfx_state {
 	struct vis_polledio	vis_polledio;	/* polled I/O callbacks */
 
 	/* IRQ state */
-	struct vmwgfx_irq_state	irq;
+	struct drm_illumos_irq_state irq;
 };
 
 /*
@@ -214,43 +201,6 @@ vmwgfx_vram_kva(size_t byte_offset)
 /* ------------------------------------------------------------------ */
 
 /*
- * vmwgfx_irq_thread — taskq worker that runs the deferred thread_fn.
- * Called from a non-interrupt context so it can use mutex/cv safely.
- */
-static void
-vmwgfx_irq_thread(void *arg)
-{
-	struct vmwgfx_state *state = (struct vmwgfx_state *)arg;
-	state->irq.thread_fn(0, state->irq.dev_id);
-}
-
-/*
- * vmwgfx_ddi_intr_handler — DDI hard-interrupt callback.
- *
- * Calls the Linux-style hard-IRQ handler.  If it returns IRQ_WAKE_THREAD
- * we dispatch the deferred thread_fn via the taskq.
- */
-static uint_t
-vmwgfx_ddi_intr_handler(caddr_t arg1, caddr_t arg2)
-{
-	struct vmwgfx_state *state = (struct vmwgfx_state *)(void *)arg1;
-	irqreturn_t ret;
-
-	(void)arg2;
-
-	ret = state->irq.handler(0, state->irq.dev_id);
-
-	if (ret == IRQ_NONE)
-		return (DDI_INTR_UNCLAIMED);
-
-	if (ret == IRQ_WAKE_THREAD && state->irq.thread_fn != NULL)
-		(void) taskq_dispatch(state->irq.tq, vmwgfx_irq_thread,
-		    state, TQ_NOSLEEP);
-
-	return (DDI_INTR_CLAIMED);
-}
-
-/*
  * illumos_vmw_irq_install — register a DDI fixed interrupt for vmwgfx.
  *
  * Called from vmw_irq_install in vmwgfx_irq.c (illumos path).
@@ -261,80 +211,19 @@ illumos_vmw_irq_install(struct vmw_private *dev_priv)
 {
 	struct pci_dev *pdev = to_pci_dev(dev_priv->drm.dev);
 	struct vmwgfx_state *state;
-	int nintrs = 0, actual = 0, ret;
+	int ret;
 
 	state = ddi_get_driver_private(pdev->dip);
 	if (state == NULL)
 		return (-ENODEV);
 
-	if (state->irq.registered) {
-		cmn_err(CE_WARN, "vmwgfx: IRQ already registered");
-		return (0);
-	}
+	ret = drm_illumos_irq_install(pdev->dip, &state->irq, "vmwgfx_irqthr",
+	    vmw_irq_handler, vmw_thread_fn, &dev_priv->drm);
+	if (ret != 0)
+		return (ret);
 
-	/* Check how many fixed (INTx) interrupts the device has */
-	ret = ddi_intr_get_nintrs(pdev->dip, DDI_INTR_TYPE_FIXED, &nintrs);
-	if (ret != DDI_SUCCESS || nintrs < 1) {
-		cmn_err(CE_WARN,
-		    "vmwgfx: ddi_intr_get_nintrs failed or no fixed IRQs "
-		    "(ret=%d nintrs=%d)", ret, nintrs);
-		return (-ENODEV);
-	}
-
-	/* Create a single-thread taskq for the deferred handler */
-	state->irq.tq = taskq_create("vmwgfx_irqthr", 1, maxclsyspri,
-	    1, 1, TASKQ_PREPOPULATE);
-	if (state->irq.tq == NULL) {
-		cmn_err(CE_WARN, "vmwgfx: taskq_create for IRQ thread failed");
-		return (-ENOMEM);
-	}
-
-	/* Allocate one fixed interrupt */
-	ret = ddi_intr_alloc(pdev->dip, &state->irq.intr_hdl,
-	    DDI_INTR_TYPE_FIXED, 0, 1, &actual, DDI_INTR_ALLOC_NORMAL);
-	if (ret != DDI_SUCCESS || actual < 1) {
-		cmn_err(CE_WARN,
-		    "vmwgfx: ddi_intr_alloc failed (ret=%d actual=%d)",
-		    ret, actual);
-		taskq_destroy(state->irq.tq);
-		state->irq.tq = NULL;
-		return (-ENODEV);
-	}
-
-	/* Store Linux handler pointers */
-	state->irq.handler   = vmw_irq_handler;
-	state->irq.thread_fn = vmw_thread_fn;
-	state->irq.dev_id    = &dev_priv->drm;
-
-	/* Add the DDI interrupt handler */
-	ret = ddi_intr_add_handler(state->irq.intr_hdl,
-	    vmwgfx_ddi_intr_handler, (caddr_t)state, NULL);
-	if (ret != DDI_SUCCESS) {
-		cmn_err(CE_WARN,
-		    "vmwgfx: ddi_intr_add_handler failed (ret=%d)", ret);
-		ddi_intr_free(state->irq.intr_hdl);
-		taskq_destroy(state->irq.tq);
-		state->irq.tq = NULL;
-		return (-ENODEV);
-	}
-
-	/* Enable the interrupt */
-	ret = ddi_intr_enable(state->irq.intr_hdl);
-	if (ret != DDI_SUCCESS) {
-		cmn_err(CE_WARN,
-		    "vmwgfx: ddi_intr_enable failed (ret=%d)", ret);
-		ddi_intr_remove_handler(state->irq.intr_hdl);
-		ddi_intr_free(state->irq.intr_hdl);
-		taskq_destroy(state->irq.tq);
-		state->irq.tq = NULL;
-		return (-ENODEV);
-	}
-
-	state->irq.registered = B_TRUE;
 	dev_priv->irqs[0]        = 0;
 	dev_priv->num_irq_vectors = 1;
-
-	cmn_err(CE_CONT, "?vmwgfx: DDI fixed interrupt registered\n");
 	return (0);
 }
 
@@ -352,14 +241,7 @@ illumos_vmw_irq_uninstall(struct vmw_private *dev_priv)
 	if (state == NULL || !state->irq.registered)
 		return;
 
-	ddi_intr_disable(state->irq.intr_hdl);
-	ddi_intr_remove_handler(state->irq.intr_hdl);
-	ddi_intr_free(state->irq.intr_hdl);
-
-	taskq_destroy(state->irq.tq);
-	state->irq.tq = NULL;
-	state->irq.registered = B_FALSE;
-
+	drm_illumos_irq_uninstall(&state->irq);
 	dev_priv->num_irq_vectors = 0;
 }
 
@@ -787,14 +669,7 @@ vmwgfx_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 
 	/* Free DDI interrupt (should already be removed by vmw_irq_uninstall,
 	 * but clean up defensively if detach is called out of order) */
-	if (state->irq.registered) {
-		ddi_intr_disable(state->irq.intr_hdl);
-		ddi_intr_remove_handler(state->irq.intr_hdl);
-		ddi_intr_free(state->irq.intr_hdl);
-		taskq_destroy(state->irq.tq);
-		state->irq.tq = NULL;
-		state->irq.registered = B_FALSE;
-	}
+	drm_illumos_irq_uninstall(&state->irq);
 
 	/* Free VRAM console mapping */
 	if (state->vram_va != NULL) {

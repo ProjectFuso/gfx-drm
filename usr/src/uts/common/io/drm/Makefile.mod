@@ -85,6 +85,7 @@ DRM_CORE_OBJS = \
 	drm_linux.o \
 	drm_illumos_mod.o \
 	drm_illumos_file.o \
+	drm_illumos_irq.o \
 	drm_managed.o \
 	drm_mipi_dsi.o \
 	drm_mm.o \
