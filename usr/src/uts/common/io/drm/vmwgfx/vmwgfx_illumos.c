@@ -156,29 +156,6 @@ vmwgfx_read_pci_bars(struct pci_dev *pdev, ddi_acc_handle_t cfg_handle)
 	}
 }
 
-static ddi_device_acc_attr_t ioremap_acc_attr = {
-	DDI_DEVICE_ATTR_V0,
-	DDI_NEVERSWAP_ACC,
-	DDI_STRICTORDER_ACC,
-};
-
-/*
- * MMIO mapping tracking.
- *
- * ddi_regs_map_setup returns a base address and an acc_handle.
- * We need to track these so memunmap/iounmap can call ddi_regs_map_free.
- * Up to 6 PCI BARs can be mapped simultaneously.
- */
-#define	IOREMAP_MAX	6
-
-struct ioremap_entry {
-	caddr_t		base;		/* mapped kernel virtual address */
-	size_t		size;		/* mapping size */
-	ddi_acc_handle_t handle;	/* DDI access handle for unmap */
-	int		bar;		/* BAR index (0-5) */
-	boolean_t	in_use;
-};
-
 /*
  * IRQ state — tracks the DDI interrupt handle and Linux handler pointers
  * so the DDI hard-IRQ callback can dispatch to the driver's handlers.
@@ -213,7 +190,6 @@ static const struct vis_identifier vmwgfx_vis_ident = {
 /* Per-instance state */
 struct vmwgfx_state {
 	struct pci_dev		pci_dev;	/* Linux compat PCI device */
-	struct ioremap_entry	maps[IOREMAP_MAX];
 	struct vmwgfx_open	opens[VMWGFX_MAX_OPENS];
 
 	/* VIS framebuffer console state */
@@ -244,122 +220,6 @@ vmwgfx_vram_kva(size_t byte_offset)
 	if (state == NULL || state->vram_va == NULL)
 		return NULL;
 	return state->vram_va + byte_offset;
-}
-
-/*
- * illumos_ioremap — Map a PCI BAR region into kernel virtual address space.
- *
- * Matches phys_addr against pdev->resource[] to find the BAR index, then
- * calls ddi_regs_map_setup with rnumber = bar_index + 1 (rnumber 0 is
- * PCI config space).  The mapping is tracked in the vmwgfx_state so
- * illumos_iounmap can free it later.
- */
-void *
-illumos_ioremap(struct pci_dev *pdev, resource_size_t phys_addr, size_t size)
-{
-	struct vmwgfx_state *state;
-	int bar, ret, i;
-	off_t bar_offset;
-	caddr_t base;
-	ddi_acc_handle_t handle;
-
-	if (pdev == NULL || pdev->dip == NULL)
-		return (NULL);
-
-	state = ddi_get_driver_private(pdev->dip);
-	if (state == NULL)
-		return (NULL);
-
-	/* Find which BAR contains phys_addr */
-	bar = -1;
-	bar_offset = 0;
-	for (i = 0; i < 6; i++) {
-		resource_size_t start = pdev->resource[i].start;
-		resource_size_t end = pdev->resource[i].end;
-
-		if (start == 0)
-			continue;
-		if (phys_addr >= start && phys_addr <= end) {
-			bar = i;
-			bar_offset = (off_t)(phys_addr - start);
-			break;
-		}
-	}
-
-	if (bar < 0) {
-		cmn_err(CE_WARN,
-		    "illumos_ioremap: phys 0x%llx does not match any BAR",
-		    (unsigned long long)phys_addr);
-		return (NULL);
-	}
-
-	/* Find a free tracking slot */
-	for (i = 0; i < IOREMAP_MAX; i++) {
-		if (!state->maps[i].in_use)
-			break;
-	}
-	if (i >= IOREMAP_MAX) {
-		cmn_err(CE_WARN, "illumos_ioremap: no free mapping slots");
-		return (NULL);
-	}
-
-	/*
-	 * rnumber = bar + 1 because rnumber 0 is PCI config space.
-	 * For 64-bit BARs that consume two slots, the DDI still
-	 * uses a single rnumber for the 64-bit region.
-	 */
-	ret = ddi_regs_map_setup(pdev->dip, bar + 1,
-	    &base, bar_offset, (off_t)size,
-	    &ioremap_acc_attr, &handle);
-
-	if (ret != DDI_SUCCESS) {
-		cmn_err(CE_WARN,
-		    "illumos_ioremap: ddi_regs_map_setup(bar=%d, off=0x%lx, "
-		    "size=0x%lx) failed: %d",
-		    bar, (unsigned long)bar_offset, (unsigned long)size, ret);
-		return (NULL);
-	}
-
-	state->maps[i].base = base;
-	state->maps[i].size = size;
-	state->maps[i].handle = handle;
-	state->maps[i].bar = bar;
-	state->maps[i].in_use = B_TRUE;
-
-	cmn_err(CE_CONT,
-	    "?illumos_ioremap: BAR%d phys 0x%llx+0x%lx -> VA %p\n",
-	    bar, (unsigned long long)phys_addr,
-	    (unsigned long)size, (void *)base);
-
-	return ((void *)base);
-}
-
-/*
- * illumos_iounmap — Unmap a previously mapped BAR region.
- */
-void
-illumos_iounmap(struct pci_dev *pdev, void *addr)
-{
-	struct vmwgfx_state *state;
-	int i;
-
-	if (pdev == NULL || addr == NULL)
-		return;
-
-	state = ddi_get_driver_private(pdev->dip);
-	if (state == NULL)
-		return;
-
-	for (i = 0; i < IOREMAP_MAX; i++) {
-		if (state->maps[i].in_use &&
-		    state->maps[i].base == (caddr_t)addr) {
-			ddi_regs_map_free(&state->maps[i].handle);
-			state->maps[i].in_use = B_FALSE;
-			return;
-		}
-	}
-
-	cmn_err(CE_WARN, "illumos_iounmap: addr %p not found", addr);
 }
 
 /* ------------------------------------------------------------------ */
@@ -953,17 +813,6 @@ vmwgfx_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	if (state->vram_va != NULL) {
 		ddi_regs_map_free(&state->vram_handle);
 		state->vram_va = NULL;
-	}
-
-	/* Free any active MMIO mappings */
-	{
-		int i;
-		for (i = 0; i < IOREMAP_MAX; i++) {
-			if (state->maps[i].in_use) {
-				ddi_regs_map_free(&state->maps[i].handle);
-				state->maps[i].in_use = B_FALSE;
-			}
-		}
 	}
 
 	pci_config_teardown(&pdev->config_handle);

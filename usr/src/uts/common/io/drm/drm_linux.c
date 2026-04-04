@@ -2695,12 +2695,16 @@ sync_file_get_fence(int fd)
 void *
 memremap(phys_addr_t phys_addr, size_t size, int flags)
 {
+	if (flags & MEMREMAP_WB)
+		return drm_sun_ioremap(phys_addr, size, DRM_MEM_CACHED);
+
 	return NULL;
 }
 
 void
 memunmap(void *addr)
 {
+	drm_sun_iounmap(addr);
 }
 
 /* ===== kfree_const ===== */
