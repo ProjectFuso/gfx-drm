@@ -150,4 +150,17 @@ void	memunmap(void *);
 #define inw(port)  ({ uint16_t _v; __asm__ volatile("inw %w1,%0" : "=a"(_v) : "Nd"((uint16_t)(port))); _v; })
 #define inb(port)  ({ uint8_t  _v; __asm__ volatile("inb %w1,%0" : "=a"(_v) : "Nd"((uint16_t)(port))); _v; })
 
+#define DRM_MEM_CACHED 0
+#define DRM_MEM_UNCACHED 1
+#define DRM_MEM_WC 2
+
+void *drm_sun_ioremap(uint64_t paddr, size_t size, uint32_t mode);
+void drm_sun_iounmap(void *addr);
+
+#define ioremap_cache(base, size) \
+	drm_sun_ioremap((base), (size), DRM_MEM_CACHED)
+#define ioremap_wc(base, size) drm_sun_ioremap((base), (size), DRM_MEM_WC)
+#define ioremap(base, size) drm_sun_ioremap((base), (size), DRM_MEM_UNCACHED)
+#define iounmap(addr) drm_sun_iounmap((addr))
+
 #endif

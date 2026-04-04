@@ -47,6 +47,7 @@
 #include <sys/varargs.h>
 #include <sys/systm.h>
 #include <sys/debug.h>
+#include <sys/gfx_private.h>
 
 #include <linux/dma-buf.h>
 #include <linux/mod_devicetable.h>
@@ -3178,3 +3179,59 @@ drm_fbdev_client_setup(struct drm_device *dev,
  */
 void kfpu_begin(void) {}
 void kfpu_end(void) {}
+
+struct drm_iomem {
+	void *addr;
+	size_t size;
+	struct list_head head;
+};
+
+struct list_head drm_iomem_list;
+
+void *
+drm_sun_ioremap(uint64_t paddr, size_t size, uint32_t mode)
+{
+	struct drm_iomem *iomem;
+	void *addr;
+
+	if (mode == DRM_MEM_CACHED)
+		mode = GFXP_MEMORY_CACHED;
+	else if (mode == DRM_MEM_UNCACHED)
+		mode = GFXP_MEMORY_UNCACHED;
+	else if (mode == DRM_MEM_WC)
+		mode = GFXP_MEMORY_WRITECOMBINED;
+	else
+		return (NULL);
+
+	addr = (void *)gfxp_alloc_kernel_space(size);
+	if(!addr)
+		return (NULL);
+	gfxp_load_kernel_space(paddr, size, mode, addr);
+	iomem = kmem_zalloc(sizeof(*iomem), KM_NOSLEEP);
+	if(!iomem){
+		gfxp_unmap_kernel_space(addr, size);
+		return (NULL);
+	}
+	iomem->addr = addr;
+	iomem->size = size;
+
+	INIT_LIST_HEAD(&iomem->head);
+	list_add(&iomem->head, &drm_iomem_list);
+
+	return (addr);
+}
+
+void
+drm_sun_iounmap(void *addr)
+{
+	struct drm_iomem *iomem;
+
+	list_for_each_entry(iomem, &drm_iomem_list, head) {
+		if (iomem->addr == addr) {
+		  gfxp_unmap_kernel_space(addr, iomem->size);
+			list_del(&iomem->head);
+			kmem_free(iomem, sizeof(*iomem));
+			break;
+		}
+	}
+}
