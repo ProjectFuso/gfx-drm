@@ -11,6 +11,7 @@
 struct drm_device;
 struct drm_file;
 struct drm_minor;
+struct pci_dev;
 struct pollhead;
 
 #define DRM_ILUMOS_MAX_OPENS 64
@@ -47,5 +48,7 @@ int drm_illumos_irq_install(dev_info_t *dip, struct drm_illumos_irq_state *irq,
     const char *taskq_name, irq_handler_t handler, irq_handler_t thread_fn,
     void *dev_id);
 void drm_illumos_irq_uninstall(struct drm_illumos_irq_state *irq);
+void drm_illumos_pci_init_device(struct pci_dev *pdev, dev_info_t *dip,
+    ddi_acc_handle_t cfg_handle);
 
 #endif
