@@ -464,6 +464,7 @@ int drm_release(struct inode *inode, struct file *filp);
 int drm_release_noglobal(struct inode *inode, struct file *filp);
 __poll_t drm_poll(struct file *filp, struct poll_table_struct *wait);
 #endif
+int drm_open_helper(struct file *filp, struct drm_minor *minor);
 int drm_event_reserve_init_locked(struct drm_device *dev,
 				  struct drm_file *file_priv,
 				  struct drm_pending_event *p,

@@ -21,11 +21,14 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <linux/illumos_page_compat.h>
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/poll.h>
 #include <sys/sunddi.h>
 
+#include <drm/drm_drv.h>
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
 #include <drm/drm_gem.h>
