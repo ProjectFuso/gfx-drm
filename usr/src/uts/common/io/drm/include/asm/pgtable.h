@@ -20,8 +20,6 @@ typedef unsigned long pgprot_t;
 
 #define pgprot_val(p)		(p)
 #define pgprot_decrypted(p)	(p)
-#define PAGE_KERNEL		0UL
-#define PAGE_KERNEL_IO		0UL
 
 /*
  * x86 PTE flag bits (identical on i386 and amd64).
@@ -35,6 +33,9 @@ typedef unsigned long pgprot_t;
 #define PG_N	0x010UL		/* no-cache (PCD) */
 #define PG_PAT	0x080UL		/* PAT bit (4K pages) */
 #endif
+
+#define PAGE_KERNEL		(PG_V | PG_RW)
+#define PAGE_KERNEL_IO		(PG_V | PG_RW)
 
 /* Linux aliases */
 #define _PAGE_PRESENT	PG_V
