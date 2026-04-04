@@ -55,105 +55,6 @@ extern irqreturn_t vmw_thread_fn(int irq, void *arg);
  */
 static struct vmwgfx_state *vmwgfx_global_state;
 
-/*
- * vmwgfx_read_pci_bars - Read PCI BAR addresses and sizes from config space.
- *
- * Populates pdev->resource[] by reading each BAR register pair, detecting
- * whether each BAR is I/O or MMIO (32- or 64-bit), and using the standard
- * write-all-ones size-detection technique.
- */
-static void
-vmwgfx_read_pci_bars(struct pci_dev *pdev, ddi_acc_handle_t cfg_handle)
-{
-	static const off_t bar_offsets[6] = {
-		PCI_CONF_BASE0, PCI_CONF_BASE1, PCI_CONF_BASE2,
-		PCI_CONF_BASE3, PCI_CONF_BASE4, PCI_CONF_BASE5,
-	};
-	int i;
-
-	for (i = 0; i < 6; i++) {
-		uint32_t bar_lo = pci_config_get32(cfg_handle, bar_offsets[i]);
-
-		if (bar_lo == 0 || bar_lo == 0xFFFFFFFFU)
-			continue;
-
-		if (bar_lo & 1) {
-			/* I/O space BAR */
-			uint32_t saved, mask;
-			resource_size_t base, size;
-
-			base = (resource_size_t)(bar_lo & ~0x3U);
-
-			saved = bar_lo;
-			pci_config_put32(cfg_handle, bar_offsets[i], 0xFFFFFFFFU);
-			mask = pci_config_get32(cfg_handle, bar_offsets[i]);
-			pci_config_put32(cfg_handle, bar_offsets[i], saved);
-
-			size = (resource_size_t)((~(mask & ~0x3U) + 1U) & 0xFFFFU);
-			if (size == 0)
-				size = 256;
-
-			pdev->resource[i].start = base;
-			pdev->resource[i].end   = base + size - 1;
-			pdev->resource[i].flags = IORESOURCE_IO;
-		} else {
-			uint8_t type = (uint8_t)((bar_lo >> 1) & 0x3);
-
-			if (type == 2 && i < 5) {
-				/* 64-bit MMIO BAR — low half at [i], high at [i+1] */
-				uint32_t bar_hi, saved_lo, saved_hi;
-				uint32_t mask_lo, mask_hi;
-				uint64_t full_base, full_mask, size;
-
-				bar_hi   = pci_config_get32(cfg_handle, bar_offsets[i + 1]);
-				full_base = ((uint64_t)bar_hi << 32) |
-				            (uint64_t)(bar_lo & ~0xFU);
-
-				saved_lo = bar_lo;
-				saved_hi = bar_hi;
-				pci_config_put32(cfg_handle, bar_offsets[i],     0xFFFFFFFFU);
-				pci_config_put32(cfg_handle, bar_offsets[i + 1], 0xFFFFFFFFU);
-				mask_lo = pci_config_get32(cfg_handle, bar_offsets[i]);
-				mask_hi = pci_config_get32(cfg_handle, bar_offsets[i + 1]);
-				pci_config_put32(cfg_handle, bar_offsets[i],     saved_lo);
-				pci_config_put32(cfg_handle, bar_offsets[i + 1], saved_hi);
-
-				full_mask = ((uint64_t)mask_hi << 32) |
-				            (uint64_t)(mask_lo & ~0xFU);
-				size = ~full_mask + 1ULL;
-				if (size == 0)
-					size = 4096;
-
-				pdev->resource[i].start = (resource_size_t)full_base;
-				pdev->resource[i].end   = (resource_size_t)(full_base + size - 1);
-				pdev->resource[i].flags = IORESOURCE_MEM | IORESOURCE_MEM_64;
-
-				/* The next config register belongs to this BAR. */
-				i++;
-			} else {
-				/* 32-bit MMIO BAR */
-				uint32_t saved, mask;
-				resource_size_t base, size;
-
-				base = (resource_size_t)(bar_lo & ~0xFU);
-
-				saved = bar_lo;
-				pci_config_put32(cfg_handle, bar_offsets[i], 0xFFFFFFFFU);
-				mask = pci_config_get32(cfg_handle, bar_offsets[i]);
-				pci_config_put32(cfg_handle, bar_offsets[i], saved);
-
-				size = (resource_size_t)((~(mask & ~0xFU) + 1U) & 0xFFFFFFFFU);
-				if (size == 0)
-					size = 4096;
-
-				pdev->resource[i].start = base;
-				pdev->resource[i].end   = base + size - 1;
-				pdev->resource[i].flags = IORESOURCE_MEM;
-			}
-		}
-	}
-}
-
 #define	VMWGFX_MINOR_SLOT(m)		((int)((m) & 0x3f))
 
 /* VIS identifier string returned to the terminal emulator */
@@ -524,26 +425,7 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	/* Allocate and fill Linux pci_dev wrapper */
 	state = kmem_zalloc(sizeof(*state), KM_SLEEP);
 	pdev = &state->pci_dev;
-
-	pdev->dip = dip;
-	pdev->config_handle = cfg_handle;
-	pdev->vendor = pci_config_get16(cfg_handle, PCI_CONF_VENID);
-	pdev->device = pci_config_get16(cfg_handle, PCI_CONF_DEVID);
-	pdev->subsystem_vendor = pci_config_get16(cfg_handle, PCI_CONF_SUBVENID);
-	pdev->subsystem_device = pci_config_get16(cfg_handle, PCI_CONF_SUBSYSID);
-	pdev->revision = pci_config_get8(cfg_handle, PCI_CONF_REVID);
-	pdev->class = (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_BASCLASS) << 16 |
-	              (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_SUBCLASS) << 8 |
-	              (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_PROGCLASS);
-	pdev->bus = &pdev->_bus;
-	pdev->bus->config_handle = cfg_handle;
-
-	/* Populate resource[] from PCI BAR registers */
-	vmwgfx_read_pci_bars(pdev, cfg_handle);
-
-	/* Set up embedded Linux device */
-	pdev->dev.dip = dip;
-	pdev->dev.pdev = pdev;
+	drm_illumos_pci_init_device(pdev, dip, cfg_handle);
 
 	/* Match against vmwgfx PCI ID table */
 	match = pci_match_id(vmw_pci_driver.id_table, pdev);
