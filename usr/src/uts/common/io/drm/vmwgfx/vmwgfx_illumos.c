@@ -27,9 +27,7 @@
 #include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_device.h>
-
-/* drm_open_helper is not in a public header; declare it here */
-extern int drm_open_helper(struct file *filp, struct drm_minor *minor);
+#include <drm/drm_illumos.h>
 
 /* Forward declarations from vmwgfx_drv.c */
 extern struct pci_driver vmw_pci_driver;
@@ -169,17 +167,6 @@ struct vmwgfx_irq_state {
 	boolean_t		registered;
 };
 
-/* Maximum simultaneous DRM file opens */
-#define	VMWGFX_MAX_OPENS	64
-
-/* Per-open file descriptor */
-struct vmwgfx_open {
-	struct file		filp;		/* Linux compat file handle */
-	struct drm_minor	*minor;		/* DRM minor for this open */
-	boolean_t		in_use;
-};
-
-/* Minor number macros — slot fits in 6 bits (0..63) */
 #define	VMWGFX_MINOR_SLOT(m)		((int)((m) & 0x3f))
 
 /* VIS identifier string returned to the terminal emulator */
@@ -190,7 +177,7 @@ static const struct vis_identifier vmwgfx_vis_ident = {
 /* Per-instance state */
 struct vmwgfx_state {
 	struct pci_dev		pci_dev;	/* Linux compat PCI device */
-	struct vmwgfx_open	opens[VMWGFX_MAX_OPENS];
+	struct drm_illumos_file_state files;
 
 	/* VIS framebuffer console state */
 	caddr_t			vram_va;	/* kernel VA of VRAM (BAR1) */
@@ -822,29 +809,12 @@ vmwgfx_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	return DDI_SUCCESS;
 }
 
-/*
- * Fake file_operations used to satisfy drm_open_helper's
- * WARN_ON_ONCE(!(filp->f_op->fop_flags & FOP_UNSIGNED_OFFSET)).
- */
-static const struct file_operations vmwgfx_fops_stub = {
-	.fop_flags = FOP_UNSIGNED_OFFSET,
-};
-
-/*
- * vmwgfx_cb_open — illumos DDI cb_open entry point.
- *
- * Allocates a drm_file context and calls drm_open_helper().
- * The open slot index (0..VMWGFX_MAX_OPENS-1) is encoded as the minor
- * number returned to the DDI so subsequent close/ioctl can find it.
- */
 static int
 vmwgfx_cb_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 {
 	struct vmwgfx_state *state;
 	struct drm_device *drm;
-	struct drm_minor *minor;
-	struct vmwgfx_open *op;
-	int slot, ret;
+	int ret;
 
 	(void)flag; (void)otyp; (void)credp;
 
@@ -856,73 +826,21 @@ vmwgfx_cb_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 	if (drm == NULL)
 		return (ENXIO);
 
-	/* Use primary minor */
-	minor = drm->primary;
-	if (minor == NULL)
-		return (ENXIO);
-
-	/* Find a free open slot */
-	for (slot = 0; slot < VMWGFX_MAX_OPENS; slot++) {
-		if (!state->opens[slot].in_use)
-			break;
-	}
-	if (slot >= VMWGFX_MAX_OPENS)
-		return (EBUSY);
-
-	op = &state->opens[slot];
-	bzero(&op->filp, sizeof (op->filp));
-	op->filp.f_op = &vmwgfx_fops_stub;
-	op->minor = minor;
-
-	drm_dev_get(drm);
-	atomic_inc(&drm->open_count);
-
-	ret = drm_open_helper(&op->filp, minor);
-	if (ret != 0) {
-		atomic_dec(&drm->open_count);
-		drm_dev_put(drm);
-		return (-ret);
-	}
-
-	op->in_use = B_TRUE;
-
-	/* Encode the open slot into the minor number returned to userspace */
-	*devp = makedevice(getmajor(*devp), (minor_t)slot);
-	return (0);
+	ret = drm_illumos_open(&state->files, drm, devp);
+	return (ret);
 }
 
 static int
 vmwgfx_cb_close(dev_t dev, int flag, int otyp, cred_t *credp)
 {
 	struct vmwgfx_state *state;
-	struct vmwgfx_open *op;
-	struct drm_device *drm;
-	int slot;
 
 	(void)flag; (void)otyp; (void)credp;
-
-	slot = VMWGFX_MINOR_SLOT(getminor(dev));
 	state = vmwgfx_global_state;
-
-	if (state == NULL || slot < 0 || slot >= VMWGFX_MAX_OPENS ||
-	    !state->opens[slot].in_use)
+	if (state == NULL)
 		return (ENXIO);
 
-	op = &state->opens[slot];
-	drm = pci_get_drvdata(&state->pci_dev);
-	if (drm == NULL)
-		return (ENXIO);
-
-	/*
-	 * drm_release handles drm_close_helper, open_count decrement, and
-	 * drm_minor_release (which calls drm_dev_put).  This balances the
-	 * drm_dev_get we did in vmwgfx_cb_open.  Do NOT call drm_minor_release
-	 * or drm_dev_put again — they would be double-releases.
-	 */
-	drm_release(NULL, &op->filp);
-
-	op->in_use = B_FALSE;
-	return (0);
+	return drm_illumos_close(&state->files, dev);
 }
 
 static int
@@ -930,17 +848,14 @@ vmwgfx_cb_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
     cred_t *credp, int *rvalp)
 {
 	struct vmwgfx_state *state;
-	struct vmwgfx_open *op;
 	int slot, vis_ret;
-	long ret;
 
 	(void)credp; (void)rvalp;
 
 	slot = VMWGFX_MINOR_SLOT(getminor(dev));
 	state = vmwgfx_global_state;
 
-	if (state == NULL || slot < 0 || slot >= VMWGFX_MAX_OPENS ||
-	    !state->opens[slot].in_use)
+	if (state == NULL || slot < 0 || slot >= DRM_ILUMOS_MAX_OPENS)
 		return (ENXIO);
 
 	/* VIS ioctls are handled directly without going through DRM */
@@ -948,60 +863,21 @@ vmwgfx_cb_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
 	if (vis_ret != ENOTTY)
 		return (vis_ret);
 
-	op = &state->opens[slot];
-
-	ret = drm_ioctl(&op->filp, (unsigned int)cmd, (unsigned long)arg);
-	return (ret < 0 ? (int)-ret : 0);
+	return drm_illumos_ioctl(&state->files, dev, cmd, arg);
 }
 
-// To Claude Code: I implemented this preliminary for you; please review
-// and fix this.
 static int
 vmwgfx_cb_chpoll(dev_t dev, short events, int anyyet, short *reventsp,
 		 struct pollhead **phpp)
 {
-  	struct vmwgfx_state *state;
-	struct vmwgfx_open *op;
-        struct drm_file *file_priv;
-	int slot, vis_ret;
-	short revents = 0;
-	long ret;
+	struct vmwgfx_state *state;
 
-	slot = VMWGFX_MINOR_SLOT(getminor(dev));
 	state = vmwgfx_global_state;
-
-	if (state == NULL || slot < 0 || slot >= VMWGFX_MAX_OPENS ||
-	    !state->opens[slot].in_use)
+	if (state == NULL)
 		return (ENXIO);
 
-	op = &state->opens[slot];
-        file_priv = op->filp.private_data;
-        if (!file_priv)
-              return (EBADF);
-
-        if (!anyyet) {
-	  *phpp = &file_priv->drm_pollhead;
-        }
-
-        // *reventsp = drm_poll(file_priv, events); // signature mismatch
-
-	/* 2. Xorg only polls for incoming data (Read events) */
-	if (events & (POLLIN | POLLRDNORM)) {
-
-          /* Lock the event list just like the read() syscall would */
-          mutex_enter(&file_priv->event_read_lock);
-
-          /* 3. If the list has events, we have data ready to be read! */
-          if (!list_empty(&file_priv->event_list)) {
-            revents |= events & (POLLIN | POLLRDNORM);
-          }
-
-          mutex_exit(&file_priv->event_read_lock);
-	}
-
-	*reventsp = revents;
-
-        return (0);
+	return drm_illumos_chpoll(&state->files, dev, events, anyyet,
+	    reventsp, phpp);
 }
 
 static int
@@ -1024,31 +900,13 @@ vmwgfx_getinfo(dev_info_t *dip, ddi_info_cmd_t cmd, void *arg, void **result)
 	}
 }
 
-/*
- * vmwgfx_cb_devmap — mmap GEM buffer objects to userspace.
- *
- * When userspace calls mmap(fd, offset, size) on /dev/dri/card0, the offset
- * comes from DRM_IOCTL_MODE_MAP_DUMB (or drm_gem_create_mmap_offset).  The
- * DRM VMA offset manager stores a mapping from that offset to the GEM object.
- *
- * We look up the GEM object, get its TTM backing store, and use the
- * ddi_umem_cookie from ttm_pool_alloc() to map the pages into userspace.
- */
+/* vmwgfx maps GEM/TTM objects through the shared illumos DRM helper. */
 static int
 vmwgfx_cb_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
     size_t len, size_t *maplen, uint_t model)
 {
 	struct vmwgfx_state *state;
 	struct drm_device *drm;
-	struct drm_vma_offset_manager *mgr;
-	struct drm_vma_offset_node *node;
-	struct drm_gem_object *gem;
-	struct ttm_buffer_object *bo;
-	struct ttm_tt *ttm;
-	unsigned long pgoff;
-	unsigned long npages;
-	unsigned long node_pgoff;
-	size_t map_off;
 	int ret;
 
 	(void)model; (void)dev;
@@ -1061,115 +919,10 @@ vmwgfx_cb_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
 	if (drm == NULL)
 		return (ENXIO);
 
-	mgr = drm->vma_offset_manager;
-	if (mgr == NULL)
-		return (ENXIO);
-
-	pgoff  = (unsigned long)(off >> PAGE_SHIFT);
-	npages = (unsigned long)((len + PAGE_SIZE - 1) >> PAGE_SHIFT);
-
-	drm_vma_offset_lock_lookup(mgr);
-	node = drm_vma_offset_lookup_locked(mgr, pgoff, npages);
-	if (node == NULL) {
-		drm_vma_offset_unlock_lookup(mgr);
-		cmn_err(CE_WARN,
-		    "vmwgfx_cb_devmap: no GEM object at pgoff 0x%lx", pgoff);
-		return (EINVAL);
-	}
-	gem = container_of(node, struct drm_gem_object, vma_node);
-	drm_gem_object_get(gem);
-	drm_vma_offset_unlock_lookup(mgr);
-
-	/* GEM object must be backed by a TTM BO */
-	bo = container_of(gem, struct ttm_buffer_object, base);
-
-	/*
-	 * For TTM_PL_SYSTEM BOs, bo->ttm is NULL until first CPU access.
-	 * We need the pages allocated now for devmap_umem_setup, so force
-	 * TTM TT creation and population under the BO reservation lock.
-	 */
-	if (bo->ttm == NULL || bo->ttm->illumos_umem_cookie == NULL) {
-		struct ttm_operation_ctx ctx = {
-			.interruptible	= false,
-			.no_wait_gpu	= false,
-		};
-
-		ret = ttm_bo_reserve(bo, false, false, NULL);
-		if (ret != 0) {
-			cmn_err(CE_WARN,
-			    "vmwgfx_cb_devmap: ttm_bo_reserve failed: %d", ret);
-			drm_gem_object_put(gem);
-			return (EINVAL);
-		}
-
-		if (bo->ttm == NULL) {
-			ret = ttm_tt_create(bo, false);
-			if (ret != 0) {
-				ttm_bo_unreserve(bo);
-				cmn_err(CE_WARN,
-				    "vmwgfx_cb_devmap: ttm_tt_create failed: %d",
-				    ret);
-				drm_gem_object_put(gem);
-				return (EINVAL);
-			}
-		}
-
-		if (!ttm_tt_is_populated(bo->ttm)) {
-			ret = ttm_tt_populate(bo->bdev, bo->ttm, &ctx);
-			if (ret != 0) {
-				ttm_bo_unreserve(bo);
-				cmn_err(CE_WARN,
-				    "vmwgfx_cb_devmap: ttm_tt_populate failed: %d",
-				    ret);
-				drm_gem_object_put(gem);
-				return (EINVAL);
-			}
-		}
-
-		ttm_bo_unreserve(bo);
-	}
-
-	ttm = bo->ttm;
-
-	if (ttm == NULL || ttm->illumos_umem_cookie == NULL) {
-		cmn_err(CE_WARN,
-		    "vmwgfx_cb_devmap: GEM obj %p has no TTM umem cookie after "
-		    "populate", gem);
-		drm_gem_object_put(gem);
-		return (EINVAL);
-	}
-
-	/*
-	 * The mmap offset may start at any page within the VMA node.
-	 * Compute the byte offset into the umem region.
-	 */
-	node_pgoff = pgoff - drm_vma_node_start(node);
-	map_off    = node_pgoff << PAGE_SHIFT;
-
-	if (map_off + len > (size_t)gem->size) {
-		drm_gem_object_put(gem);
-		return (EINVAL);
-	}
-
-	ret = devmap_umem_setup(dhp, drm->dev->pdev->dip,
-	    NULL,			/* devmap_callback_ctl — no fault handler */
-	    ttm->illumos_umem_cookie,
-	    map_off,			/* offset into umem region */
-	    len,
-	    PROT_READ | PROT_WRITE | PROT_USER,
-	    DEVMAP_DEFAULTS,
-	    NULL);			/* ddi_device_acc_attr — use default */
-
-	drm_gem_object_put(gem);
-
-	if (ret != 0) {
-		cmn_err(CE_WARN,
-		    "vmwgfx_cb_devmap: devmap_umem_setup failed: %d", ret);
-		return (ret);
-	}
-
-	*maplen = len;
-	return (0);
+	ret = drm_illumos_gem_ttm_devmap(drm, dhp, off, len, maplen);
+	if (ret != 0)
+		cmn_err(CE_WARN, "vmwgfx_cb_devmap failed: %d", ret);
+	return ret;
 }
 
 static struct cb_ops vmwgfx_cb_ops = {
