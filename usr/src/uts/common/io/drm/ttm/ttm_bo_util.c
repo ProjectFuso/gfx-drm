@@ -321,7 +321,6 @@ static int ttm_bo_ioremap(struct ttm_buffer_object *bo,
 		resource_size_t res = bo->resource->bus.offset + offset;
 
 		map->bo_kmap_type = ttm_bo_map_iomap;
-#ifdef __linux__
 		if (mem->bus.caching == ttm_write_combined)
 			map->virtual = ioremap_wc(res, size);
 #ifdef CONFIG_X86
@@ -330,10 +329,6 @@ static int ttm_bo_ioremap(struct ttm_buffer_object *bo,
 #endif
 		else
 			map->virtual = ioremap(res, size);
-#else /* __sun */
-		/* illumos Phase 1: ioremap not available; stub */
-		map->virtual = NULL;
-#endif /* __sun */
 	}
 	return (!map->virtual) ? -ENOMEM : 0;
 }
@@ -439,9 +434,7 @@ void ttm_bo_kunmap(struct ttm_bo_kmap_obj *map)
 		return;
 	switch (map->bo_kmap_type) {
 	case ttm_bo_map_iomap:
-#ifdef __linux__
 		iounmap(map->virtual);
-#endif
 		break;
 	case ttm_bo_map_vmap:
 #ifdef __linux__

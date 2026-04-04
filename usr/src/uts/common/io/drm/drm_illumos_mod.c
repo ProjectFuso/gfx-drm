@@ -31,6 +31,8 @@
 #include <sys/sunddi.h>
 #include <sys/cmn_err.h>
 
+#include <linux/list.h>
+
 extern void drm_linux_init(void);
 extern void drm_linux_exit(void);
 
@@ -44,10 +46,15 @@ static struct modlinkage drm_modlinkage = {
 	{ &drm_modlmisc, NULL }
 };
 
+extern struct list_head drm_iomem_list;
+
 int
 _init(void)
 {
 	drm_linux_init();
+
+	INIT_LIST_HEAD(&drm_iomem_list);
+
 	return (mod_install(&drm_modlinkage));
 }
 
