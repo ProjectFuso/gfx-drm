@@ -449,7 +449,22 @@ static int vmw_ttm_io_mem_reserve(struct ttm_device *bdev, struct ttm_resource *
 		mem->bus.offset = (mem->start << PAGE_SHIFT) +
 			dev_priv->vram_start;
 		mem->bus.is_iomem = true;
-		mem->bus.caching = ttm_cached;
+		mem->bus.caching = ttm_write_combined;
+#ifndef __linux__
+		/*
+		 * On illumos, ttm_kmap_iter_linear_io_init's ioremap call is
+		 * inside #ifdef __linux__ and is never reached.  Populate
+		 * bus.addr with the kernel VA of this VRAM region so that the
+		 * iter takes the fast path (bus.addr != NULL) instead, bypassing
+		 * ioremap entirely.  This enables ttm_bo_move_memcpy to copy
+		 * framebuffer data from system memory into VRAM correctly.
+		 */
+		{
+			extern caddr_t vmwgfx_vram_kva(size_t);
+			mem->bus.addr = (void *)vmwgfx_vram_kva(
+			    mem->start << PAGE_SHIFT);
+		}
+#endif
 		break;
 	default:
 		return -EINVAL;

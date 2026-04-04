@@ -73,7 +73,10 @@ kmalloc(size_t size, int flags)
 
 	if (size == 0)
 		return NULL;
-	p = kmem_alloc(size + sizeof(size_t), kflags);
+	if (flags & __GFP_ZERO)
+		p = kmem_zalloc(size + sizeof(size_t), kflags);
+	else
+		p = kmem_alloc(size + sizeof(size_t), kflags);
 	if (p == NULL)
 		return NULL;
 	*p = size;

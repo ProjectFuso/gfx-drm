@@ -2651,52 +2651,151 @@ kfree_const(const void *addr)
 /* ===== DMA coherent alloc (Phase 1 stub) ===== */
 
 /*
- * Phase 1: Use plain kmem_zalloc and a fake DMA address.
- * Full implementation requires ddi_dma_mem_alloc.
+ * DMA coherent memory — DDI implementation.
+ *
+ * Uses ddi_dma_mem_alloc with dma_attr_sgllen=1 to guarantee a single
+ * physically contiguous segment.  ddi_dma_addr_bind_handle returns the
+ * true bus address (cookie.dmac_laddress) that the device uses for DMA.
+ *
+ * A per-allocation tracking list (dma_coherent_list) maps cpu_addr →
+ * {ddi_dma_handle_t, ddi_acc_handle_t} so dma_free_coherent can properly
+ * unbind and free the DDI resources.
  */
+
+struct dma_coherent_entry {
+	void			*cpu_addr;
+	ddi_dma_handle_t	 dma_hdl;
+	ddi_acc_handle_t	 acc_hdl;
+	struct list_head	 node;
+};
+
+static DRM_LIST_HEAD(dma_coherent_list);
+static kmutex_t dma_coherent_lock;
+
 /*
- * hat_getpfnum / kas — forward-declared to avoid vm/hat.h conflicts.
- * Used to translate kernel VA → physical (bus) address for DMA.
+ * DMA attributes for coherent allocations:
+ * - 64-bit address range
+ * - PAGE_SIZE alignment
+ * - sgllen=1 forces a single physically contiguous segment
  */
-struct hat;
-struct as;
-extern pfn_t hat_getpfnum(struct hat *, caddr_t);
-extern struct as kas;
+static ddi_dma_attr_t dma_coherent_attr = {
+	DMA_ATTR_V0,		/* dma_attr_version   */
+	0,			/* dma_attr_addr_lo   */
+	0xFFFFFFFFFFFFFFFFULL,	/* dma_attr_addr_hi   */
+	0xFFFFFFFFFFFFFFFFULL,	/* dma_attr_count_max */
+	(uint64_t)PAGE_SIZE,	/* dma_attr_align     */
+	0xFFF,			/* dma_attr_burstsizes */
+	1,			/* dma_attr_minxfer   */
+	0xFFFFFFFFFFFFFFFFULL,	/* dma_attr_maxxfer   */
+	0xFFFFFFFFFFFFFFFFULL,	/* dma_attr_seg       */
+	1,			/* dma_attr_sgllen    (1 = must be physically contiguous) */
+	1,			/* dma_attr_granular  */
+	0			/* dma_attr_flags     */
+};
+
+/* Strictly ordered, non-swapping access: coherent (CPU-visible) memory. */
+static ddi_device_acc_attr_t dma_coherent_acc_attr = {
+	DDI_DEVICE_ATTR_V0,
+	DDI_NEVERSWAP_ACC,
+	DDI_STRICTORDER_ACC,
+	DDI_DEFAULT_ACC
+};
 
 void *
 dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,
     int gfp)
 {
-	void *mem;
-	pfn_t pfn;
+	ddi_dma_handle_t	 dma_hdl;
+	ddi_acc_handle_t	 acc_hdl;
+	ddi_dma_cookie_t	 cookie;
+	uint_t			 ncookies;
+	size_t			 real_size;
+	char			*cpu_addr;
+	struct dma_coherent_entry *ent;
+	dev_info_t		*dip;
+	int			 ret;
 
-	/*
-	 * kmem_zalloc with KM_SLEEP returns page-aligned, physically
-	 * contiguous memory for sizes up to a few MB (which covers all
-	 * current callers — command buffer pool, etc.).
-	 *
-	 * Compute the physical address via hat_getpfnum so the device can
-	 * DMA-read the allocation.  The kernel VA → PA translation is
-	 * required because the illumos kernel is mapped at a high virtual
-	 * address (PA != VA).
-	 */
-	mem = kmem_zalloc(size, KM_SLEEP);
-	if (mem == NULL) {
-		*dma_handle = 0;
+	*dma_handle = 0;
+
+	if (dev == NULL || dev->dip == NULL) {
+		cmn_err(CE_WARN, "dma_alloc_coherent: no dev_info_t");
 		return NULL;
 	}
-	pfn = hat_getpfnum(kas.a_hat, (caddr_t)mem);
-	*dma_handle = ((dma_addr_t)pfn << PAGE_SHIFT) |
-	    ((uintptr_t)mem & (PAGE_SIZE - 1));
-	return mem;
+	dip = dev->dip;
+
+	ret = ddi_dma_alloc_handle(dip, &dma_coherent_attr,
+	    DDI_DMA_SLEEP, NULL, &dma_hdl);
+	if (ret != DDI_SUCCESS) {
+		cmn_err(CE_WARN, "dma_alloc_coherent: ddi_dma_alloc_handle failed %d", ret);
+		return NULL;
+	}
+
+	ret = ddi_dma_mem_alloc(dma_hdl, size, &dma_coherent_acc_attr,
+	    DDI_DMA_CONSISTENT, DDI_DMA_SLEEP, NULL,
+	    &cpu_addr, &real_size, &acc_hdl);
+	if (ret != DDI_SUCCESS) {
+		cmn_err(CE_WARN, "dma_alloc_coherent: ddi_dma_mem_alloc failed %d", ret);
+		ddi_dma_free_handle(&dma_hdl);
+		return NULL;
+	}
+
+	bzero(cpu_addr, real_size);
+
+	ret = ddi_dma_addr_bind_handle(dma_hdl, NULL, cpu_addr, real_size,
+	    DDI_DMA_RDWR | DDI_DMA_CONSISTENT, DDI_DMA_SLEEP, NULL,
+	    &cookie, &ncookies);
+	if (ret != DDI_DMA_MAPPED) {
+		cmn_err(CE_WARN, "dma_alloc_coherent: ddi_dma_addr_bind_handle failed %d", ret);
+		ddi_dma_mem_free(&acc_hdl);
+		ddi_dma_free_handle(&dma_hdl);
+		return NULL;
+	}
+
+	if (ncookies != 1) {
+		cmn_err(CE_WARN, "dma_alloc_coherent: got %u cookies (need 1, memory not contiguous)", ncookies);
+		ddi_dma_unbind_handle(dma_hdl);
+		ddi_dma_mem_free(&acc_hdl);
+		ddi_dma_free_handle(&dma_hdl);
+		return NULL;
+	}
+
+	ent = kmem_alloc(sizeof(*ent), KM_SLEEP);
+	ent->cpu_addr = cpu_addr;
+	ent->dma_hdl  = dma_hdl;
+	ent->acc_hdl  = acc_hdl;
+	INIT_LIST_HEAD(&ent->node);
+
+	mutex_enter(&dma_coherent_lock);
+	list_add(&ent->node, &dma_coherent_list);
+	mutex_exit(&dma_coherent_lock);
+
+	*dma_handle = (dma_addr_t)cookie.dmac_laddress;
+	return cpu_addr;
 }
 
 void
 dma_free_coherent(struct device *dev, size_t size, void *cpu_addr,
     dma_addr_t dma_handle)
 {
-	if (cpu_addr)
-		kmem_free(cpu_addr, size);
+	struct dma_coherent_entry *ent, *tmp;
+
+	if (cpu_addr == NULL)
+		return;
+
+	mutex_enter(&dma_coherent_lock);
+	list_for_each_entry_safe(ent, tmp, &dma_coherent_list, node) {
+		if (ent->cpu_addr == cpu_addr) {
+			list_del(&ent->node);
+			mutex_exit(&dma_coherent_lock);
+			ddi_dma_unbind_handle(ent->dma_hdl);
+			ddi_dma_mem_free(&ent->acc_hdl);
+			ddi_dma_free_handle(&ent->dma_hdl);
+			kmem_free(ent, sizeof(*ent));
+			return;
+		}
+	}
+	mutex_exit(&dma_coherent_lock);
+	cmn_err(CE_WARN, "dma_free_coherent: no entry for %p", cpu_addr);
 }
 
 int
@@ -3021,6 +3120,9 @@ drm_linux_init(void)
 
 	/* component lock */
 	mutex_init(&component_lock, NULL, MUTEX_DRIVER, NULL);
+
+	/* DMA coherent tracking lock */
+	mutex_init(&dma_coherent_lock, NULL, MUTEX_DRIVER, NULL);
 }
 
 void
@@ -3028,6 +3130,7 @@ drm_linux_exit(void)
 {
 	tsd_destroy(&drm_task_tsd_key);
 
+	mutex_destroy(&dma_coherent_lock);
 	mutex_destroy(&component_lock);
 	mutex_destroy(&shrinker_lock);
 	mutex_destroy(&drvdata_lock);
