@@ -652,25 +652,87 @@ kunmap_atomic(void *addr)
 	/* illumos: pages are always mapped in kernel; no-op */
 }
 
-void *
-vmap(struct page **pages, unsigned int npages, unsigned long flags,
-    pgprot_t prot)
+static uint_t _pgprot_to_hat(pgprot_t prot)
 {
-	/* Phase 1: not implemented */
-	return NULL;
+	uint_t hat_flags = PROT_READ;
+
+	/* 1. Handle Read/Write protection */
+	if (prot & PG_RW)
+		hat_flags |= PROT_WRITE;
+
+	/* 2. Handle Caching Policy (The PAT/PCD/PWT bits) */
+	if (prot & PG_WT) {
+		/* * Linux uses PWT=1, PCD=0 for Write-Combining (WC).
+         * In illumos, we map this to HAT_UNORDERED_OK or HAT_STORECACHING_OK.
+         */
+		hat_flags |= HAT_UNORDERED_OK;
+	} else if (prot & PG_N) {
+		/*
+         * Linux uses PCD=1 for Uncacheable (UC).
+         * In illumos, this is HAT_STRICTORDER.
+         */
+		hat_flags |= HAT_STRICTORDER;
+	}
+
+	return (hat_flags);
 }
 
-void *
-vmap_pfn(unsigned long *pfns, unsigned int npfn, pgprot_t prot)
+void *vmap(struct page **pages, unsigned int npages, unsigned long flags,
+	   pgprot_t prot)
 {
-	/* Phase 1: not implemented */
-	return NULL;
+	size_t size = (size_t)npages << PAGE_SHIFT;
+	caddr_t va;
+	uint_t hat_prot = _pgprot_to_hat(prot);
+
+	/* Allocate a contiguous range of Kernel Virtual Address space */
+	va = gfxp_alloc_kernel_space(size);
+	if (va == NULL)
+		return (NULL);
+
+	/* Map each page into the VA range */
+	for (int i = 0; i < npages; i++) {
+		caddr_t cur_va = va + (i << PAGE_SHIFT);
+
+		// pfn_t pfn = page_to_pfn(pages[i]);
+		pfn_t pfn = hat_getpfnum(kas.a_hat, pages[i]->kaddr);
+
+		/* kas.a_hat is the Kernel Address Space HAT */
+		hat_devload(kas.a_hat, cur_va, PAGE_SIZE, pfn, hat_prot,
+			    HAT_LOAD_LOCK);
+	}
+
+	return ((void *)va);
 }
 
-void
-vunmap(void *addr, size_t size)
+void *vmap_pfn(unsigned long *pfns, unsigned int npfn, pgprot_t prot)
 {
-	/* Phase 1: not implemented */
+	size_t size = (size_t)npfn << PAGE_SHIFT;
+	caddr_t va;
+	uint_t hat_prot = _pgprot_to_hat(prot);
+
+	va = gfxp_alloc_kernel_space(size);
+	if (va == NULL)
+		return (NULL);
+
+	for (int i = 0; i < npfn; i++) {
+		caddr_t cur_va = va + (i << PAGE_SHIFT);
+
+		/* Use hat_devload for PFNs/Physical addresses */
+		hat_devload(kas.a_hat, cur_va, PAGE_SIZE, pfns[i], hat_prot,
+			    HAT_LOAD_LOCK);
+	}
+
+	return ((void *)va);
+}
+
+void vunmap(void *addr, size_t size)
+{
+	if (addr == NULL)
+		return;
+
+	hat_unload(kas.a_hat, (caddr_t)addr, size, HAT_UNLOAD);
+
+	gfxp_free_kernel_space((caddr_t)addr, size);
 }
 
 bool
