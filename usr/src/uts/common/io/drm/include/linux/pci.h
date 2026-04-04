@@ -698,42 +698,52 @@ pci_release_region(struct pci_dev *pdev, int bar)
 }
 
 /*
- * devm_ioremap / devm_memremap — device-managed MMIO mapping.
+ * devm_ioremap / devm_memremap — illumos wrappers.
  *
- * On illumos, these call illumos_ioremap() which uses ddi_regs_map_setup()
- * to map PCI BAR regions.  The physical address is matched against
- * pdev->resource[] to determine the BAR index.
+ * These are not truly device-managed yet. They currently reuse the generic
+ * DRM illumos MMIO mapping helpers from linux/io.h.
  */
 #include <linux/io.h>
-
-/* Implemented in vmwgfx/vmwgfx_illumos.c */
-extern void *illumos_ioremap(struct pci_dev *, resource_size_t, size_t);
-extern void  illumos_iounmap(struct pci_dev *, void *);
+#include <linux/err.h>
 
 static inline void *
 devm_ioremap(struct device *dev, resource_size_t offset, resource_size_t size)
 {
-	return illumos_ioremap(dev->pdev, offset, (size_t)size);
+	(void)dev;
+	return drm_sun_ioremap(offset, (size_t)size, DRM_MEM_UNCACHED);
 }
 
 static inline void *
 devm_memremap(struct device *dev, resource_size_t offset, resource_size_t size,
     unsigned long flags)
 {
-	return illumos_ioremap(dev->pdev, offset, (size_t)size);
+	void *addr;
+
+	(void)dev;
+
+	if ((flags & MEMREMAP_WB) == 0)
+		return ERR_PTR(-EINVAL);
+
+	addr = drm_sun_ioremap(offset, (size_t)size, DRM_MEM_CACHED);
+	if (addr == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	return addr;
 }
 
 static inline void *
 devm_ioremap_wc(struct device *dev, resource_size_t offset,
     resource_size_t size)
 {
-	return illumos_ioremap(dev->pdev, offset, (size_t)size);
+	(void)dev;
+	return drm_sun_ioremap(offset, (size_t)size, DRM_MEM_WC);
 }
 
 static inline void
 pci_iounmap(struct pci_dev *pdev, void __iomem *addr)
 {
-	illumos_iounmap(pdev, (void *)addr);
+	(void)pdev;
+	drm_sun_iounmap((void *)addr);
 }
 
 #endif /* _LINUX_PCI_H_ */
