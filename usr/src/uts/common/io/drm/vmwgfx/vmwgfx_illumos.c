@@ -229,6 +229,24 @@ struct vmwgfx_state {
 };
 
 /*
+ * vmwgfx_vram_kva — Return the kernel VA for a byte offset into VRAM.
+ *
+ * Called by vmw_ttm_io_mem_reserve to populate mem->bus.addr so that
+ * ttm_kmap_iter_linear_io_init can copy to/from VRAM without needing
+ * Linux's ioremap (which is inside a #ifdef __linux__ block).
+ *
+ * Returns NULL if VRAM is not yet mapped (attach not complete).
+ */
+caddr_t
+vmwgfx_vram_kva(size_t byte_offset)
+{
+	struct vmwgfx_state *state = vmwgfx_global_state;
+	if (state == NULL || state->vram_va == NULL)
+		return NULL;
+	return state->vram_va + byte_offset;
+}
+
+/*
  * illumos_ioremap — Map a PCI BAR region into kernel virtual address space.
  *
  * Matches phys_addr against pdev->resource[] to find the BAR index, then
@@ -817,8 +835,15 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	}
 
 	/*
-	 * Map VRAM (BAR1, rnumber=2) for the VIS framebuffer console.
-	 * We only need to map enough for width*height*4 bytes.
+	 * Map the full VRAM (BAR1, rnumber=2) into kernel VA space.
+	 *
+	 * size=0 means "map the entire BAR".  The mapping is used both for:
+	 *  - the VIS framebuffer console (offset 0, fb_size bytes)
+	 *  - TTM buffer moves from system memory → VRAM (all of VRAM)
+	 *
+	 * TTM's ttm_kmap_iter_linear_io_init checks mem->bus.addr first; if
+	 * set it uses it directly without calling ioremap (which is Linux-only).
+	 * vmw_ttm_io_mem_reserve populates bus.addr from vmwgfx_vram_kva().
 	 */
 	{
 		struct drm_device *drm_dev = pci_get_drvdata(pdev);
@@ -834,8 +859,9 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 			DDI_MERGING_OK_ACC,
 		};
 
-		if (fb_size > 0 && ddi_regs_map_setup(dip, 2,
-		    &vram_base, 0, (off_t)fb_size,
+		/* Map the full BAR (size=0). */
+		if (ddi_regs_map_setup(dip, 2,
+		    &vram_base, 0, 0,
 		    &acc, &vram_handle) == DDI_SUCCESS) {
 			state->vram_va     = vram_base;
 			state->vram_handle = vram_handle;
@@ -843,8 +869,9 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 			state->fb_height   = fb_h;
 			state->fb_stride   = fb_w * 4;
 
-			/* Zero the framebuffer */
-			bzero(vram_base, fb_size);
+			/* Zero the visible framebuffer portion */
+			if (fb_size > 0)
+				bzero(vram_base, fb_size);
 
 			/* Set up polled I/O callbacks */
 			state->vis_polledio.arg     =
@@ -854,13 +881,13 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 			state->vis_polledio.cursor  = vmwgfx_poll_cursor;
 
 			cmn_err(CE_CONT,
-			    "?vmwgfx: VRAM mapped at %p (%ux%u, %lu bytes)\n",
+			    "?vmwgfx: VRAM mapped at %p (full BAR, "
+			    "VIS %ux%u %lu bytes)\n",
 			    (void *)vram_base, fb_w, fb_h,
 			    (unsigned long)fb_size);
 		} else {
 			cmn_err(CE_WARN,
-			    "vmwgfx: failed to map VRAM for VIS console "
-			    "(fb_size=%lu)", (unsigned long)fb_size);
+			    "vmwgfx: failed to map VRAM BAR1");
 		}
 	}
 
