@@ -209,14 +209,72 @@ drm_illumos_chpoll(struct drm_illumos_file_state *state, dev_t dev,
 }
 
 int
+drm_illumos_gem_mmap_obj(struct drm_gem_object *gem, devmap_cookie_t dhp,
+    offset_t off, size_t len, size_t *maplen)
+{
+	struct ttm_buffer_object *bo;
+	struct ttm_tt *ttm;
+	int ret;
+
+	bo = container_of(gem, struct ttm_buffer_object, base);
+
+	if (bo->ttm == NULL || bo->ttm->illumos_umem_cookie == NULL) {
+		struct ttm_operation_ctx ctx = {
+			.interruptible = false,
+			.no_wait_gpu = false,
+		};
+
+		ret = ttm_bo_reserve(bo, false, false, NULL);
+		if (ret != 0) {
+			return (EINVAL);
+		}
+
+		if (bo->ttm == NULL) {
+			ret = ttm_tt_create(bo, false);
+			if (ret != 0) {
+				ttm_bo_unreserve(bo);
+				return (EINVAL);
+			}
+		}
+
+		if (!ttm_tt_is_populated(bo->ttm)) {
+			ret = ttm_tt_populate(bo->bdev, bo->ttm, &ctx);
+			if (ret != 0) {
+				ttm_bo_unreserve(bo);
+				return (EINVAL);
+			}
+		}
+
+		ttm_bo_unreserve(bo);
+	}
+
+	ttm = bo->ttm;
+	if (ttm == NULL || ttm->illumos_umem_cookie == NULL) {
+		return (EINVAL);
+	}
+
+	if ((size_t)off + len > (size_t)gem->size) {
+		return (EINVAL);
+	}
+
+	ret = devmap_umem_setup(dhp, gem->dev->dev->dip, NULL,
+	    ttm->illumos_umem_cookie, (size_t)off, len,
+	    PROT_READ | PROT_WRITE | PROT_USER, DEVMAP_DEFAULTS, NULL);
+
+	if (ret != 0)
+		return (ret);
+
+	*maplen = len;
+	return (0);
+}
+
+int
 drm_illumos_gem_ttm_devmap(struct drm_device *drm, devmap_cookie_t dhp,
     offset_t off, size_t len, size_t *maplen)
 {
 	struct drm_vma_offset_manager *mgr;
 	struct drm_vma_offset_node *node;
 	struct drm_gem_object *gem;
-	struct ttm_buffer_object *bo;
-	struct ttm_tt *ttm;
 	unsigned long pgoff;
 	unsigned long npages;
 	unsigned long node_pgoff;
@@ -240,63 +298,11 @@ drm_illumos_gem_ttm_devmap(struct drm_device *drm, devmap_cookie_t dhp,
 	drm_gem_object_get(gem);
 	drm_vma_offset_unlock_lookup(mgr);
 
-	bo = container_of(gem, struct ttm_buffer_object, base);
-
-	if (bo->ttm == NULL || bo->ttm->illumos_umem_cookie == NULL) {
-		struct ttm_operation_ctx ctx = {
-			.interruptible = false,
-			.no_wait_gpu = false,
-		};
-
-		ret = ttm_bo_reserve(bo, false, false, NULL);
-		if (ret != 0) {
-			drm_gem_object_put(gem);
-			return (EINVAL);
-		}
-
-		if (bo->ttm == NULL) {
-			ret = ttm_tt_create(bo, false);
-			if (ret != 0) {
-				ttm_bo_unreserve(bo);
-				drm_gem_object_put(gem);
-				return (EINVAL);
-			}
-		}
-
-		if (!ttm_tt_is_populated(bo->ttm)) {
-			ret = ttm_tt_populate(bo->bdev, bo->ttm, &ctx);
-			if (ret != 0) {
-				ttm_bo_unreserve(bo);
-				drm_gem_object_put(gem);
-				return (EINVAL);
-			}
-		}
-
-		ttm_bo_unreserve(bo);
-	}
-
-	ttm = bo->ttm;
-	if (ttm == NULL || ttm->illumos_umem_cookie == NULL) {
-		drm_gem_object_put(gem);
-		return (EINVAL);
-	}
-
 	node_pgoff = pgoff - drm_vma_node_start(node);
 	map_off = node_pgoff << PAGE_SHIFT;
 
-	if (map_off + len > (size_t)gem->size) {
-		drm_gem_object_put(gem);
-		return (EINVAL);
-	}
-
-	ret = devmap_umem_setup(dhp, drm->dev->pdev->dip, NULL,
-	    ttm->illumos_umem_cookie, map_off, len,
-	    PROT_READ | PROT_WRITE | PROT_USER, DEVMAP_DEFAULTS, NULL);
+	ret = drm_illumos_gem_mmap_obj(gem, dhp, (offset_t)map_off, len, maplen);
 
 	drm_gem_object_put(gem);
-	if (ret != 0)
-		return (ret);
-
-	*maplen = len;
-	return (0);
+	return (ret);
 }

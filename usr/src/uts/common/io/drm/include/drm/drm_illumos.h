@@ -7,6 +7,7 @@
 #include <sys/poll.h>
 #include <sys/mutex.h>
 #include <sys/sunddi.h>
+#include <sys/vnode.h>
 
 #include <linux/fs.h>
 #include <linux/interrupt.h>
@@ -30,6 +31,14 @@ struct drm_file;
 struct drm_minor;
 struct pci_dev;
 struct pollhead;
+struct dma_buf;
+
+struct drm_illumos_dmabuf {
+	struct dma_buf *dmabuf;
+	vnode_t *vnode;
+	kmutex_t lock;
+	int refcnt;
+};
 
 #define DRM_ILUMOS_MAX_OPENS 64
 
@@ -111,6 +120,8 @@ int drm_illumos_ioctl(struct drm_illumos_file_state *state, dev_t dev,
 int drm_illumos_chpoll(struct drm_illumos_file_state *state, dev_t dev,
     short events, int anyyet, short *reventsp, struct pollhead **phpp);
 int drm_illumos_gem_ttm_devmap(struct drm_device *drm, devmap_cookie_t dhp,
+    offset_t off, size_t len, size_t *maplen);
+int drm_illumos_gem_mmap_obj(struct drm_gem_object *obj, devmap_cookie_t dhp,
     offset_t off, size_t len, size_t *maplen);
 int drm_illumos_irq_install(dev_info_t *dip, struct drm_illumos_irq_state *irq,
     const char *taskq_name, irq_handler_t handler, irq_handler_t thread_fn,

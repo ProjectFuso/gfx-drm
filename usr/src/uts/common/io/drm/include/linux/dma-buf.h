@@ -36,6 +36,7 @@ struct dma_buf {
 	struct file *file;
 	struct list_head attachments;
 	struct dma_resv *resv;
+	void *illumos_vnode;
 };
 
 struct dma_buf_attachment {
