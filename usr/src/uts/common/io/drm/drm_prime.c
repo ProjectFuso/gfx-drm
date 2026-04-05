@@ -520,6 +520,7 @@ int drm_gem_prime_handle_to_fd(struct drm_device *dev,
 			       int *prime_fd)
 {
 	struct dma_buf *dmabuf;
+#ifdef __linux__
 	int fd = get_unused_fd_flags(flags);
 
 	if (fd < 0)
@@ -534,6 +535,22 @@ int drm_gem_prime_handle_to_fd(struct drm_device *dev,
 	fd_install(fd, dmabuf->file);
 	*prime_fd = fd;
 	return 0;
+#else /* illumos: use dma_buf_fd() which goes through falloc/setf */
+	int fd;
+
+	dmabuf = drm_gem_prime_handle_to_dmabuf(dev, file_priv, handle, flags);
+	if (IS_ERR(dmabuf))
+		return PTR_ERR(dmabuf);
+
+	fd = dma_buf_fd(dmabuf, (int)flags);
+	if (fd < 0) {
+		dma_buf_put(dmabuf);
+		return fd;
+	}
+
+	*prime_fd = fd;
+	return 0;
+#endif
 }
 EXPORT_SYMBOL(drm_gem_prime_handle_to_fd);
 

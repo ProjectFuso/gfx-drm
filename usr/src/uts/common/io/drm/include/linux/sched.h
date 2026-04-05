@@ -56,6 +56,10 @@ struct task_struct {
 	unsigned int		 flags;
 	int			 exit_code;
 	struct task_struct	*group_leader;
+	/* illumos: per-task sleep cv so wake_up_process() can cut schedule_timeout short */
+	kmutex_t		 sched_mutex;
+	kcondvar_t		 sched_cv;
+	bool			 sched_should_wake;
 };
 
 static inline pid_t
