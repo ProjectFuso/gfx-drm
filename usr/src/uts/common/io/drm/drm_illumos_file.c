@@ -93,8 +93,6 @@ drm_illumos_open(struct drm_illumos_file_state *state,
 
 	if (kind == DRM_ILLUMOS_KIND_PRIMARY)
 		minor = drm->primary;
-	else if (kind == DRM_ILLUMOS_KIND_CONTROL)
-		minor = drm->control;
 	else if (kind == DRM_ILLUMOS_KIND_RENDER)
 		minor = drm->render;
 	else

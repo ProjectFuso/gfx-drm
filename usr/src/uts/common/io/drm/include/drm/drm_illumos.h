@@ -45,7 +45,6 @@ struct pollhead;
 #define DRM_ILLUMOS_INST_SHIFT		8
 
 #define DRM_ILLUMOS_KIND_PRIMARY	0
-#define DRM_ILLUMOS_KIND_CONTROL	1
 #define DRM_ILLUMOS_KIND_RENDER		2
 
 static inline minor_t
