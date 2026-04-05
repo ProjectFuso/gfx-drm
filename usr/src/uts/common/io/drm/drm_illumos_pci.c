@@ -21,6 +21,8 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <linux/illumos_page_compat.h>
+
 #include <sys/types.h>
 #include <sys/sunddi.h>
 #include <sys/pci.h>
