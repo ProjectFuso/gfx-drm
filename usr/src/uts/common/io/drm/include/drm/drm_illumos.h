@@ -1,6 +1,8 @@
 #ifndef _DRM_ILLUMOS_H_
 #define _DRM_ILLUMOS_H_
 
+#include <linux/illumos_page_compat.h>
+
 #include <sys/types.h>
 #include <sys/poll.h>
 #include <sys/sunddi.h>
