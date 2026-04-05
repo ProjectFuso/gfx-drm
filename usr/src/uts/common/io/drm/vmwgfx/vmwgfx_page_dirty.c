@@ -32,10 +32,12 @@
  * VMW_BO_DIRTY_PAGETABLE - Scan the pagetable for hardware dirty bits
  * VMW_BO_DIRTY_MKWRITE - Write-protect page table entries and record write-
  * accesses in the VM mkwrite() callback
+ * VMW_BO_DIRTY_NONE - No dirty tracking (e.g. on illumos)
  */
 enum vmw_bo_dirty_method {
 	VMW_BO_DIRTY_PAGETABLE,
 	VMW_BO_DIRTY_MKWRITE,
+	VMW_BO_DIRTY_NONE,
 };
 
 /*
@@ -166,7 +168,7 @@ void vmw_bo_dirty_scan(struct vmw_bo *vbo)
 
 	if (dirty->method == VMW_BO_DIRTY_PAGETABLE)
 		vmw_bo_dirty_scan_pagetable(vbo);
-	else
+	else if (dirty->method == VMW_BO_DIRTY_MKWRITE)
 		vmw_bo_dirty_scan_mkwrite(vbo);
 }
 
@@ -250,6 +252,7 @@ int vmw_bo_dirty_add(struct vmw_bo *vbo)
 	dirty->start = dirty->bitmap_size;
 	dirty->end = 0;
 	kref_init(&dirty->ref_count);
+#ifdef __linux__
 	if (num_pages < PAGE_SIZE / sizeof(pte_t)) {
 		dirty->method = VMW_BO_DIRTY_PAGETABLE;
 	} else {
@@ -265,6 +268,9 @@ int vmw_bo_dirty_add(struct vmw_bo *vbo)
 						  &dirty->bitmap[0],
 						  &dirty->start, &dirty->end);
 	}
+#else
+	dirty->method = VMW_BO_DIRTY_NONE;
+#endif
 
 	vbo->dirty = dirty;
 

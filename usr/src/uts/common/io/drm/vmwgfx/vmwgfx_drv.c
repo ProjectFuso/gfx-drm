@@ -1340,7 +1340,7 @@ static void vmw_master_drop(struct drm_device *dev,
 
 bool vmwgfx_supported(struct vmw_private *vmw)
 {
-#if defined(CONFIG_X86)
+#if defined(CONFIG_X86) || (defined(__illumos__) && (defined(__amd64) || defined(__i386)))
 	return hypervisor_is_type(X86_HYPER_VMWARE);
 #elif defined(CONFIG_ARM64)
 	/*
