@@ -27,29 +27,18 @@ This project is a refactor and maintenance gate for the Graphics Direct Renderin
 
 ## Building and Running
 
-### Build Environment
-To work on the project, you must use the `bldenv` tool to set up the appropriate environment variables:
-```bash
-/usr/bin/ksh93 tools/bldenv -d myenv.sh
-```
+Refer to `BUILD_WORKFLOW.md` for building instructions
 
-### Key Commands
-- `make install`: Builds the workspace and installs binaries into the `proto/` area.
-- `make debug`: Performs a debug-enabled build and install.
-- `make package`: Assembles the IPS packages under `packages/`.
-- `make clean`: Clobbers the workspace.
+## Refereneces
 
-### Incremental Development
-For driver work, enter `bldenv` and navigate to the module directory:
-```bash
-cd usr/src/uts/intel/drm
-make install
-```
+Under references there are three directories for reference:
+- `linux-drm`: Authentic linux DRM source code
+- `linux-drm-header`: Authentic linux DRM headers
+- `openbsd-drm`: The OpenBSD port of linux DRM (targeting linux-6.12.74); use for reference on how to implement compatibility layers
 
 ## Development Conventions
 
-- **Coding Style:** Adhere to **illumos kernel style** (Tabs for indentation, K&R braces).
-- **Tooling:** Use `cstyle` and `hdrchk` for C files and headers.
+- **Coding Style:** Adhere to **linux kernel style**.
 - **Patch Management:**
     - Use `usr/src/common/libdrm/Check-patches` to verify local edits to imported libraries.
     - Follow `linux_sources.md` and `compatibility_layers.md` to distinguish between imported Linux code and local glue.
