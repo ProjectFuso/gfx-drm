@@ -55,15 +55,14 @@ extern irqreturn_t vmw_thread_fn(int irq, void *arg);
  */
 static struct vmwgfx_state *vmwgfx_global_state;
 
-#define	VMWGFX_MINOR_SLOT(m)		((int)((m) & 0x3f))
-
 /* VIS identifier string returned to the terminal emulator */
 static const struct vis_identifier vmwgfx_vis_ident = {
 	"ILLUMOSvmwgfx"
 };
 
-/* Per-instance state */
-struct vmwgfx_state {
+ /* Per-instance state */
+ struct vmwgfx_state {
+
 	struct pci_dev		pci_dev;	/* Linux compat PCI device */
 	struct drm_illumos_file_state files;
 
@@ -121,7 +120,7 @@ illumos_vmw_irq_install(struct vmw_private *dev_priv)
 	ret = drm_illumos_irq_install(pdev->dip, &state->irq, "vmwgfx_irqthr",
 	    vmw_irq_handler, vmw_thread_fn, &dev_priv->drm);
 	if (ret != 0)
-		return (ret);
+		return (-ret);
 
 	dev_priv->irqs[0]        = 0;
 	dev_priv->num_irq_vectors = 1;
@@ -438,6 +437,9 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	/* Save state */
 	ddi_set_driver_private(dip, state);
 
+	/* Initialize file state */
+	drm_illumos_file_state_init(&state->files);
+
 	/* Call the Linux probe function */
 	ret = vmw_pci_driver.probe(pdev, match);
 	if (ret != 0) {
@@ -518,6 +520,7 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	return DDI_SUCCESS;
 
 fail_probe:
+	drm_illumos_file_state_destroy(&state->files);
 	ddi_set_driver_private(dip, NULL);
 fail_match:
 	pci_config_teardown(&cfg_handle);
@@ -549,6 +552,9 @@ vmwgfx_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	if (vmw_pci_driver.remove)
 		vmw_pci_driver.remove(pdev);
 
+	/* Tear down file state (closes all outstanding opens) */
+	drm_illumos_file_state_destroy(&state->files);
+
 	/* Free DDI interrupt (should already be removed by vmw_irq_uninstall,
 	 * but clean up defensively if detach is called out of order) */
 	drm_illumos_irq_uninstall(&state->irq);
@@ -571,7 +577,7 @@ vmwgfx_cb_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 {
 	struct vmwgfx_state *state;
 	struct drm_device *drm;
-	int ret;
+	int instance, ret;
 
 	(void)flag; (void)otyp; (void)credp;
 
@@ -583,7 +589,9 @@ vmwgfx_cb_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 	if (drm == NULL)
 		return (ENXIO);
 
-	ret = drm_illumos_open(&state->files, drm, devp);
+	instance = ddi_get_instance(state->pci_dev.dip);
+	ret = drm_illumos_open(&state->files, drm, instance,
+	    DRM_ILLUMOS_KIND_PRIMARY, devp);
 	return (ret);
 }
 
@@ -609,7 +617,7 @@ vmwgfx_cb_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
 
 	(void)credp; (void)rvalp;
 
-	slot = VMWGFX_MINOR_SLOT(getminor(dev));
+	slot = drm_illumos_decode_slot(getminor(dev));
 	state = vmwgfx_global_state;
 
 	if (state == NULL || slot < 0 || slot >= DRM_ILUMOS_MAX_OPENS)

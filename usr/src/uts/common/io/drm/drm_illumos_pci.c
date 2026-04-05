@@ -56,7 +56,7 @@ drm_illumos_pci_read_bars(struct pci_dev *pdev, ddi_acc_handle_t cfg_handle)
 			mask = pci_config_get32(cfg_handle, bar_offsets[i]);
 			pci_config_put32(cfg_handle, bar_offsets[i], saved);
 
-			size = (resource_size_t)((~(mask & ~0x3U) + 1U) & 0xFFFFU);
+			size = (resource_size_t)((~(mask & ~0x3U) + 1U) & 0xFFFFFFFFU);
 			if (size == 0)
 				size = 256;
 
@@ -125,6 +125,12 @@ void
 drm_illumos_pci_init_device(struct pci_dev *pdev, dev_info_t *dip,
     ddi_acc_handle_t cfg_handle)
 {
+	int *reg;
+	uint_t n;
+	uint16_t cmd;
+	int i;
+	bool has_io = false;
+
 	pdev->dip = dip;
 	pdev->config_handle = cfg_handle;
 	pdev->vendor = pci_config_get16(cfg_handle, PCI_CONF_VENID);
@@ -135,10 +141,45 @@ drm_illumos_pci_init_device(struct pci_dev *pdev, dev_info_t *dip,
 	pdev->class = (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_BASCLASS) << 16 |
 	    (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_SUBCLASS) << 8 |
 	    (uint32_t)pci_config_get8(cfg_handle, PCI_CONF_PROGCLASS);
+
+	/*
+	 * R8: Populate bus number and devfn from "reg" property.
+	 * reg[0] bits 23:16 = bus, 15:11 = device, 10:8 = function.
+	 */
 	pdev->bus = &pdev->_bus;
 	pdev->bus->config_handle = cfg_handle;
+	pdev->bus->domain_nr = 0;	/* illumos: single domain support today */
+	pdev->bus->is_root = true;	/* Phase 1 stub: treat as root */
+	pdev->bus->self = NULL;
+
+	if (ddi_prop_lookup_int_array(DDI_DEV_T_ANY, dip, DDI_PROP_DONTPASS,
+	    "reg", &reg, &n) == DDI_PROP_SUCCESS) {
+		if (n >= 1) {
+			pdev->bus->number = (reg[0] >> 16) & 0xFF;
+			pdev->devfn = (reg[0] >> 8) & 0xFF;
+		}
+		ddi_prop_free(reg);
+	}
 
 	drm_illumos_pci_read_bars(pdev, cfg_handle);
+
+	/*
+	 * R7: Enable memory space and bus mastering.
+	 * Enable I/O space only if the device has I/O BARs.
+	 */
+	cmd = pci_config_get16(cfg_handle, PCI_CONF_COMM);
+	cmd |= PCI_COMM_MAE | PCI_COMM_ME;
+
+	for (i = 0; i < 6; i++) {
+		if (pdev->resource[i].flags & IORESOURCE_IO) {
+			has_io = true;
+			break;
+		}
+	}
+	if (has_io)
+		cmd |= PCI_COMM_IO;
+
+	pci_config_put16(cfg_handle, PCI_CONF_COMM, cmd);
 
 	pdev->dev.dip = dip;
 	pdev->dev.pdev = pdev;

@@ -42,16 +42,12 @@ static const struct file_operations drm_illumos_fops_stub = {
 	.fop_flags = FOP_UNSIGNED_OFFSET,
 };
 
-static int
-drm_illumos_minor_slot(dev_t dev)
-{
-	return (int)(getminor(dev) & 0x3f);
-}
-
 static struct drm_illumos_open *
 drm_illumos_lookup_open(struct drm_illumos_file_state *state, dev_t dev)
 {
-	int slot = drm_illumos_minor_slot(dev);
+	int slot = drm_illumos_decode_slot(getminor(dev));
+
+	ASSERT(MUTEX_HELD(&state->mutex));
 
 	if (state == NULL || slot < 0 || slot >= DRM_ILUMOS_MAX_OPENS)
 		return NULL;
@@ -61,9 +57,32 @@ drm_illumos_lookup_open(struct drm_illumos_file_state *state, dev_t dev)
 	return &state->opens[slot];
 }
 
+void
+drm_illumos_file_state_init(struct drm_illumos_file_state *state)
+{
+	bzero(state, sizeof(*state));
+	mutex_init(&state->mutex, NULL, MUTEX_DRIVER, NULL);
+}
+
+void
+drm_illumos_file_state_destroy(struct drm_illumos_file_state *state)
+{
+	int i;
+
+	mutex_enter(&state->mutex);
+	for (i = 0; i < DRM_ILUMOS_MAX_OPENS; i++) {
+		if (state->opens[i].in_use) {
+			drm_release(NULL, &state->opens[i].filp);
+			state->opens[i].in_use = false;
+		}
+	}
+	mutex_exit(&state->mutex);
+	mutex_destroy(&state->mutex);
+}
+
 int
 drm_illumos_open(struct drm_illumos_file_state *state,
-    struct drm_device *drm, dev_t *devp)
+    struct drm_device *drm, int instance, int kind, dev_t *devp)
 {
 	struct drm_minor *minor;
 	struct drm_illumos_open *op;
@@ -72,18 +91,32 @@ drm_illumos_open(struct drm_illumos_file_state *state,
 	if (state == NULL || drm == NULL || devp == NULL)
 		return (ENXIO);
 
-	minor = drm->primary;
+	if (kind == DRM_ILLUMOS_KIND_PRIMARY)
+		minor = drm->primary;
+	else if (kind == DRM_ILLUMOS_KIND_CONTROL)
+		minor = drm->control;
+	else if (kind == DRM_ILLUMOS_KIND_RENDER)
+		minor = drm->render;
+	else
+		return (EINVAL);
+
 	if (minor == NULL)
 		return (ENXIO);
 
+	mutex_enter(&state->mutex);
 	for (slot = 0; slot < DRM_ILUMOS_MAX_OPENS; slot++) {
 		if (!state->opens[slot].in_use)
 			break;
 	}
-	if (slot >= DRM_ILUMOS_MAX_OPENS)
+	if (slot >= DRM_ILUMOS_MAX_OPENS) {
+		mutex_exit(&state->mutex);
 		return (EBUSY);
+	}
 
 	op = &state->opens[slot];
+	op->in_use = true;
+	mutex_exit(&state->mutex);
+
 	bzero(&op->filp, sizeof(op->filp));
 	op->filp.f_op = &drm_illumos_fops_stub;
 	op->minor = minor;
@@ -95,11 +128,14 @@ drm_illumos_open(struct drm_illumos_file_state *state,
 	if (ret != 0) {
 		atomic_dec(&drm->open_count);
 		drm_dev_put(drm);
+		mutex_enter(&state->mutex);
+		op->in_use = false;
+		mutex_exit(&state->mutex);
 		return (-ret);
 	}
 
-	op->in_use = true;
-	*devp = makedevice(getmajor(*devp), (minor_t)slot);
+	*devp = makedevice(getmajor(*devp),
+	    drm_illumos_encode_minor(instance, kind, slot));
 	return (0);
 }
 
@@ -108,12 +144,16 @@ drm_illumos_close(struct drm_illumos_file_state *state, dev_t dev)
 {
 	struct drm_illumos_open *op;
 
+	mutex_enter(&state->mutex);
 	op = drm_illumos_lookup_open(state, dev);
-	if (op == NULL)
+	if (op == NULL) {
+		mutex_exit(&state->mutex);
 		return (ENXIO);
+	}
 
 	drm_release(NULL, &op->filp);
 	op->in_use = false;
+	mutex_exit(&state->mutex);
 	return (0);
 }
 
@@ -124,9 +164,13 @@ drm_illumos_ioctl(struct drm_illumos_file_state *state, dev_t dev,
 	struct drm_illumos_open *op;
 	long ret;
 
+	mutex_enter(&state->mutex);
 	op = drm_illumos_lookup_open(state, dev);
-	if (op == NULL)
+	if (op == NULL) {
+		mutex_exit(&state->mutex);
 		return (ENXIO);
+	}
+	mutex_exit(&state->mutex);
 
 	ret = drm_ioctl(&op->filp, (unsigned int)cmd, (unsigned long)arg);
 	return (ret < 0 ? (int)-ret : 0);
@@ -140,9 +184,13 @@ drm_illumos_chpoll(struct drm_illumos_file_state *state, dev_t dev,
 	struct drm_file *file_priv;
 	short revents = 0;
 
+	mutex_enter(&state->mutex);
 	op = drm_illumos_lookup_open(state, dev);
-	if (op == NULL)
+	if (op == NULL) {
+		mutex_exit(&state->mutex);
 		return (ENXIO);
+	}
+	mutex_exit(&state->mutex);
 
 	file_priv = op->filp.private_data;
 	if (file_priv == NULL)
