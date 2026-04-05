@@ -17,38 +17,6 @@ Currently active driver: **vmwgfx** (VMware virtual GPU). The i915 driver is a r
 
 Compilation is done on an illumos VM (the local host is a Linux development machine). See `BUILD_WORKFLOW.md` for the full SSH-based workflow. The VM is the authoritative compiler for illumos integration issues.
 
-## Build commands
-
-All builds run inside a `bldenv` shell that sets up the ON build environment. The top-level `Makefile` is a convenience wrapper:
-
-```sh
-# Full build (debug + non-debug, then package)
-make install
-make package
-
-# Debug-only build
-make debug
-
-# Clean
-make clean
-```
-
-For incremental module builds (the typical inner loop), enter `bldenv` and build the specific module:
-
-```sh
-# Interactive bldenv shell for incremental work
-ksh93 tools/bldenv -d myenv.sh
-
-# One-shot module builds (from repo root)
-ksh93 tools/bldenv -d myenv.sh "cd usr/src/uts/intel/drm && make install"
-ksh93 tools/bldenv -d myenv.sh "cd usr/src/uts/intel/vmwgfx && make install"
-
-# Build both modules in one command
-ksh93 tools/bldenv -d myenv.sh "cd usr/src/uts/intel/drm && make install && cd ../vmwgfx && make install"
-```
-
-Build output lands in `proto/root_i386/kernel/drv/amd64/{drm,vmwgfx}`.
-
 ## Code architecture
 
 ### Source categories
@@ -66,23 +34,27 @@ The DRM source in `usr/src/uts/common/io/drm/` falls into three categories track
 
 3. **illumos replacement units**: Files that stub or fully replace Linux facilities that don't exist on illumos (sysfs, debugfs, PRIME, VFS/file ops). These are marked "move to illumos replacement unit" in `file_change_notes.md` and are candidates for splitting into `*_illumos.c` files.
 
-### Kernel module dependency graph
-
-```
-vmwgfx  →  drm  →  agpmaster, gfx_private
-```
-
 ### Linux source reference tree
 
 `linux-drm/` holds the upstream Linux DRM source used as a sync reference. It is not compiled — it exists only for diffing and future upstream syncs.
 
-### Refactoring guidance (`file_change_notes.md`)
-
-For the 83 edited Linux-path files, there are three intended outcomes:
-- **Keep direct** (5 files): illumos-specific policy or runtime workarounds that belong in the source itself (e.g., `vmwgfx/vmwgfx_drv.c`, `drm_drv.c`).
-- **Move to illumos replacement unit** (22 files): heavily stubbed files; should become `*_illumos.c` replacements selected at build time.
-- **Move to compat/header** (56 files): edits that should become improved KPI wrappers in `include/linux/`, not patches to imported files.
-
 ### Userland libraries
 
 Userland libraries are from the old gfx-drm repository and haven't been updated yet. It is not the priority right now.
+
+## Refereneces
+
+Under references there are three directories for reference:
+- `linux-drm`: Authentic linux DRM source code
+- `linux-drm-header`: Authentic linux DRM headers
+- `openbsd-drm`: The OpenBSD port of linux DRM (targeting linux-6.12.74); use for reference on how to implement compatibility layers
+
+# illumos Headers
+On the Linux development machine, system headers are NOT illumos headers. To inspect illumos headers, look in:
+- `../core/usr/src/head`
+- `../core/usr/src/uts/common`
+
+## Developing Instructions
+
+- Adhere to **linux kernel style**.
+- Commit frequently in small increments; Don't wait until next test build before commiting. Frequent commit in small increments make it easier to work with others, and make it easier to bisect during debugging.

@@ -2,18 +2,16 @@
 
 This project is a refactor and maintenance gate for the Graphics Direct Rendering Manager (DRM) on illumos/OpenIndiana. It provides kernel-level DRM infrastructure and user-level libraries (`libdrm`) to support hardware-accelerated graphics (Intel i915, VMware vmwgfx, etc.).
 
-## Project Overview
+## What this repo is
 
-- **Hybrid Architecture:** Combines OS-specific kernel modules with external user-level libraries.
-- **Linux KPI Emulation:** Relies on a compatibility layer to run Linux-derived DRM drivers on the illumos kernel.
-- **Upstream Sync:** Actively tracks upstream Linux DRM and `libdrm` sources, applying local patches where necessary.
+A port of the Linux DRM (Direct Rendering Manager) kernel subsystem and related userland libraries to illumos. The kernel code is built using the illumos-gate ON skeleton build system; the userland libraries are downloaded from freedesktop.org at build time and patched.
 
-## Key Technologies
+Currently active driver: **vmwgfx** (VMware virtual GPU). The i915 driver is a remain from old gfx-drm stack and not currently being worked on.
 
-- **Languages:** C (Kernel & Userland), ksh93 (Tools/Build scripts).
-- **Build System:** illumos-style Makefiles (based on `on-skel`).
-- **Platform:** illumos / OpenIndiana (x86/amd64).
-- **Upstream Sources:** Linux Kernel DRM, `dri.freedesktop.org/libdrm`.
+## Goals
+
+1. Port DRM stack from Linux to illumos (currently targeting linux 6.12.74)
+2. Keep the changes to the original linux source to absolutely minimal; only modify source codes when necessary. This is critical for easier syncing in the future.
 
 ## Directory Structure
 
@@ -39,10 +37,7 @@ Under references there are three directories for reference:
 ## Development Conventions
 
 - **Coding Style:** Adhere to **linux kernel style**.
-- **Patch Management:**
-    - Use `usr/src/common/libdrm/Check-patches` to verify local edits to imported libraries.
-    - Follow `linux_sources.md` and `compatibility_layers.md` to distinguish between imported Linux code and local glue.
-- **Commit Style:** Use short, imperative subjects with area prefixes (e.g., `drm: ...`, `vmwgfx: ...`, `docs: ...`).
+- **Development Practice** Commit frequently in small increments; Don't wait until next test build before commiting. Frequent commit in small increments make it easier to work with others, and make it easier to bisect during debugging.
 
 ## Testing
 
