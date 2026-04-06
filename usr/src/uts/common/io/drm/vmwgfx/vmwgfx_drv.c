@@ -1336,6 +1336,18 @@ static void vmw_master_drop(struct drm_device *dev,
 	struct vmw_private *dev_priv = vmw_priv(dev);
 
 	vmw_kms_legacy_hotspot_clear(dev_priv);
+
+	/*
+	 * illumos VT-switch: destroy all screen objects / screen targets so
+	 * the legacy SVGA framebuffer (VRAM at offset 0) becomes the primary
+	 * display source again.  The VIS console writes directly to VRAM and
+	 * uses SVGA_CMD_UPDATE; if screen objects are still active they
+	 * overlay the legacy framebuffer and VIS output is invisible.
+	 *
+	 * X will re-create all display state when it regains DRM master via
+	 * drmSetMaster() -> vmw_master_set() -> drm_sysfs_hotplug_event().
+	 */
+	vmw_kms_lost_device(dev);
 }
 
 bool vmwgfx_supported(struct vmw_private *vmw)
