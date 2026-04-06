@@ -28,6 +28,7 @@ extern "C" {
 
 struct drm_device;
 struct drm_file;
+struct drm_gem_object;
 struct drm_minor;
 struct pci_dev;
 struct pollhead;
