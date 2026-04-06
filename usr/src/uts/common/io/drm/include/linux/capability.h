@@ -13,10 +13,20 @@
 #define CAP_SYS_ADMIN	0x1
 #define CAP_SYS_NICE	0x2
 
+/*
+ * capable — illumos equivalent of Linux's capable(cap).
+ *
+ * CAP_SYS_ADMIN and CAP_SYS_NICE map to drv_priv(ddi_get_cred()) == 0,
+ * which checks that the calling thread has the PRIV_SYS_DEVICES privilege
+ * (effectively: the process is running as root or has been granted the
+ * privilege explicitly).  This is the correct illumos equivalent of
+ * CAP_SYS_ADMIN for kernel driver permission checks.
+ *
+ * All other capabilities default to false (deny), which is safe.
+ */
 static inline bool
 capable(int cap)
 {
-	/* illumos: check privileges using DDI credential check */
 	switch (cap) {
 	case CAP_SYS_ADMIN:
 	case CAP_SYS_NICE:

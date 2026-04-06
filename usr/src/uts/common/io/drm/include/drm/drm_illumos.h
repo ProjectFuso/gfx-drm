@@ -122,6 +122,11 @@ int drm_illumos_chpoll(struct drm_illumos_file_state *state, dev_t dev,
     short events, int anyyet, short *reventsp, struct pollhead **phpp);
 int drm_illumos_gem_ttm_devmap(struct drm_device *drm, devmap_cookie_t dhp,
     offset_t off, size_t len, size_t *maplen);
+/*
+ * drm_illumos_gem_mmap_obj — set up devmap for a GEM/TTM object.
+ * Caller must hold a reference on @obj (drm_gem_object_get) and
+ * release it after this call returns.
+ */
 int drm_illumos_gem_mmap_obj(struct drm_gem_object *obj, devmap_cookie_t dhp,
     offset_t off, size_t len, size_t *maplen);
 int drm_illumos_irq_install(dev_info_t *dip, struct drm_illumos_irq_state *irq,

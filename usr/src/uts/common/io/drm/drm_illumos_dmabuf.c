@@ -43,32 +43,27 @@
 #include <sys/vfs_opreg.h>
 
 #include <linux/dma-buf.h>
-#include <drm/drm_gem.h>
 
 static vnodeops_t *dma_buf_vnodeops;
 
 /*
  * dma_buf_vop_getattr — return vnode attributes for a dma-buf fd.
  *
- * Provides the size from the underlying GEM object so that callers
- * (e.g. fstat(2)) get meaningful information.
+ * Uses dmabuf->size (set at export time) so that callers (e.g. fstat(2))
+ * get meaningful information without depending on the exporter's priv type.
  */
 static int
 dma_buf_vop_getattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
     caller_context_t *ct)
 {
 	struct dma_buf *dmabuf = vp->v_data;
-	struct drm_gem_object *obj = dmabuf->priv;
 
 	(void)flags; (void)cr; (void)ct;
-
-	if (obj == NULL)
-		return (ENXIO);
 
 	bzero(vap, sizeof (*vap));
 	vap->va_type = VREG;
 	vap->va_mode = 0666;
-	vap->va_size = obj->size;
+	vap->va_size = dmabuf->size;
 	vap->va_nodeid = (ino64_t)(uintptr_t)dmabuf;
 	return (0);
 }
@@ -83,6 +78,8 @@ dma_buf_vop_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 	struct dma_buf *dmabuf = vp->v_data;
 
 	(void)cr; (void)ct;
+
+	vp->v_data = NULL;	/* prevent stale deref if vp is touched after free */
 
 	if (dmabuf->ops->release)
 		dmabuf->ops->release(dmabuf);
@@ -106,8 +103,22 @@ static const fs_operation_def_t dma_buf_vnodeops_template[] = {
 };
 
 /*
+ * drm_illumos_dmabuf_init — register the dma_buf vnodeops at module load.
+ * Must be called once from drm_linux_init() before any dma_buf_export().
+ */
+void
+drm_illumos_dmabuf_init(void)
+{
+	VERIFY(vn_make_ops("dma_buf", dma_buf_vnodeops_template,
+	    &dma_buf_vnodeops) == 0);
+}
+
+/*
  * drm_illumos_dmabuf_alloc — allocate and set up the illumos vnode backing
  * the given dma_buf.  Stores the vnode in dmabuf->illumos_vnode.
+ *
+ * drm_illumos_dmabuf_init() must have been called at module load before
+ * this function is used.
  *
  * Returns 0 on success, -ENOMEM on failure.
  */
@@ -116,11 +127,7 @@ drm_illumos_dmabuf_alloc(struct dma_buf *dmabuf)
 {
 	vnode_t *vp;
 
-	if (dma_buf_vnodeops == NULL) {
-		if (vn_make_ops("dma_buf", dma_buf_vnodeops_template,
-		    &dma_buf_vnodeops) != 0)
-			return (-ENOMEM);
-	}
+	ASSERT(dma_buf_vnodeops != NULL);
 
 	vp = vn_alloc(KM_SLEEP);
 	vn_setops(vp, dma_buf_vnodeops);

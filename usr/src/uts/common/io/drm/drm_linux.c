@@ -222,7 +222,17 @@ schedule_timeout(long timeout)
 		long remaining = (long)(deadline - ddi_get_lbolt());
 		return remaining > 0 ? remaining : 1;
 	}
-	return (ret > 0) ? (long)(deadline - ddi_get_lbolt()) : 0;
+	if (ret > 0) {
+		/* Timer fired with time left (spurious wakeup path) */
+		long remaining = (long)(deadline - ddi_get_lbolt());
+		return remaining > 0 ? remaining : 0;
+	}
+	/* ret == 0: signal interrupted; ret < 0: timeout expired */
+	if (ret == 0) {
+		long remaining = (long)(deadline - ddi_get_lbolt());
+		return remaining > 0 ? remaining : 1;
+	}
+	return 0;
 }
 
 long
@@ -2405,9 +2415,10 @@ dma_fence_is_container(struct dma_fence *fence)
  * This avoids the struct file name conflict between illumos sys/file.h
  * (kernel file table) and linux/fs.h (Linux DRM compat struct file).
  */
+extern void drm_illumos_dmabuf_init(void);
 extern int drm_illumos_dmabuf_alloc(struct dma_buf *dmabuf);
 extern void *drm_fd_to_dmabuf(int fd);   /* returns struct dma_buf *, NULL on error */
-extern int drm_vnode_to_fd(void *vp);    /* vnode_t * → fd number, or -errno */
+extern int drm_vnode_to_fd(void *vp, int flags); /* vnode_t * → fd, or -errno */
 
 struct dma_buf *
 dma_buf_export(const struct dma_buf_export_info *info)
@@ -2441,6 +2452,8 @@ dma_buf_get(int fd)
 
 	if (dmabuf == NULL)
 		return ERR_PTR(-EBADF);
+	/* drm_fd_to_dmabuf did VN_HOLD; mirror into f_count */
+	atomic_long_inc(&dmabuf->file->f_count);
 	return dmabuf;
 }
 
@@ -2449,14 +2462,14 @@ dma_buf_put(struct dma_buf *dmabuf)
 {
 	vnode_t *vp = dmabuf->illumos_vnode;
 
+	atomic_long_dec(&dmabuf->file->f_count);
 	VN_RELE(vp);
 }
 
 int
 dma_buf_fd(struct dma_buf *dmabuf, int flags)
 {
-	(void)flags;
-	return drm_vnode_to_fd(dmabuf->illumos_vnode);
+	return drm_vnode_to_fd(dmabuf->illumos_vnode, flags);
 }
 
 void
@@ -2465,6 +2478,7 @@ get_dma_buf(struct dma_buf *dmabuf)
 	vnode_t *vp = dmabuf->illumos_vnode;
 
 	VN_HOLD(vp);
+	atomic_long_inc(&dmabuf->file->f_count);
 }
 
 /* ===== PCIe link speed / width / ASPM ===== */
@@ -3277,6 +3291,9 @@ drm_linux_init(void)
 
 	/* DMA coherent tracking lock */
 	mutex_init(&dma_coherent_lock, NULL, MUTEX_DRIVER, NULL);
+
+	/* dma-buf vnode ops (must be called before any dma_buf_export()) */
+	drm_illumos_dmabuf_init();
 }
 
 void

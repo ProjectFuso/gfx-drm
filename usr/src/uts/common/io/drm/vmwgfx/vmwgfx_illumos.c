@@ -117,7 +117,7 @@ illumos_vmw_irq_install(struct vmw_private *dev_priv)
 
 	state = ddi_get_driver_private(pdev->dip);
 	if (state == NULL)
-		return (ENXIO);
+		return (-ENODEV);
 
 	for (i = 0; i < VMWGFX_MAX_NUM_IRQS; i++) {
 		vectors[i].handler = vmw_irq_handler;
@@ -518,13 +518,16 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 
 	/* Expose /dev/dri/card0 and /dev/dri/renderD128 character device nodes.
 	 * Node type "ddi_display:drm" is what SUNW_drm_link_i386.so looks for;
-	 * it creates the /dev/dri/card<N> and /dev/dri/renderD<N+128> symlinks. */
+	 * it creates the /dev/dri/card<N> and /dev/dri/renderD<N+128> symlinks.
+	 * Slot 0 is used for both nodes; the open handler encodes the slot. */
 	if (ddi_create_minor_node(dip, "card0", S_IFCHR,
-	    (minor_t)instance, "ddi_display:drm", 0) != DDI_SUCCESS) {
+	    drm_illumos_encode_minor(instance, DRM_ILLUMOS_KIND_PRIMARY, 0),
+	    "ddi_display:drm", 0) != DDI_SUCCESS) {
 		cmn_err(CE_WARN, "vmwgfx: ddi_create_minor_node(card0) failed");
 	}
 	if (ddi_create_minor_node(dip, "renderD128", S_IFCHR,
-	    (minor_t)instance + 128, "ddi_display:drm", 0) != DDI_SUCCESS) {
+	    drm_illumos_encode_minor(instance, DRM_ILLUMOS_KIND_RENDER, 0),
+	    "ddi_display:drm", 0) != DDI_SUCCESS) {
 		cmn_err(CE_WARN, "vmwgfx: ddi_create_minor_node(renderD128) failed");
 	}
 
@@ -606,12 +609,8 @@ vmwgfx_cb_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 
 	instance = ddi_get_instance(state->pci_dev.dip);
 
-	/* Determine kind from the minor number used during initial open.
-	 * cardN uses minor N, renderDN uses minor N+128. */
-	if (getminor(*devp) >= 128)
-		kind = DRM_ILLUMOS_KIND_RENDER;
-	else
-		kind = DRM_ILLUMOS_KIND_PRIMARY;
+	/* Determine kind from the encoded minor (set in vmwgfx_attach). */
+	kind = drm_illumos_decode_kind(getminor(*devp));
 
 	ret = drm_illumos_open(&state->files, drm, instance, kind, devp);
 	return (ret);

@@ -82,10 +82,12 @@ drm_fd_to_dmabuf(int fd)
  * Calls falloc(vp, …) which automatically sets f_vnode, f_ops, f_flag,
  * then calls setf() to make the fd visible.
  *
+ * @flags: Linux open flags; O_CLOEXEC (FCLOEXEC) is honoured.
+ *
  * Returns the new fd number on success, or -EMFILE on failure.
  */
 int
-drm_vnode_to_fd(void *vp_opaque)
+drm_vnode_to_fd(void *vp_opaque, int flags)
 {
 	vnode_t *vp = (vnode_t *)vp_opaque;
 	file_t *fp;
@@ -93,6 +95,9 @@ drm_vnode_to_fd(void *vp_opaque)
 
 	if (falloc(vp, FREAD | FWRITE, &fp, &fd) != 0)
 		return (-EMFILE);
+
+	if (flags & FCLOEXEC)
+		f_setfd_or(fd, (short)FCLOEXEC);
 
 	setf(fd, fp);
 	return (fd);
