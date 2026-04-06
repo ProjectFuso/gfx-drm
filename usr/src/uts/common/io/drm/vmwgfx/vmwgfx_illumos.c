@@ -73,6 +73,7 @@ static const struct vis_identifier vmwgfx_vis_ident = {
 	uint32_t		fb_height;	/* display height in pixels */
 	uint32_t		fb_stride;	/* bytes per scan line */
 	struct vis_polledio	vis_polledio;	/* polled I/O callbacks */
+	struct vmw_private	*vmw;		/* for VIS→FIFO update commands */
 
 	/* IRQ state */
 	struct drm_illumos_irq_state irq;
@@ -187,6 +188,43 @@ vmwgfx_color_map(uint8_t color)
 		0x00FFFFFF,	/* 15 bright white */
 	};
 	return ansi_colors[color & 0xf];
+}
+
+/*
+ * vmwgfx_vis_update — submit SVGA_CMD_UPDATE for a changed rectangle.
+ *
+ * In screen-object mode the SVGA device does not automatically scan out
+ * from VRAM when CPU writes occur.  We must notify the device by sending
+ * SVGA_CMD_UPDATE so it reads the dirty region from the legacy framebuffer
+ * (VRAM at offset 0) and refreshes the display.
+ *
+ * This is only called from the normal-context VIS paths.  The polled-I/O
+ * callbacks (panic / debugger) skip the FIFO because DDI services and
+ * mutexes are unavailable in that context.
+ */
+static void
+vmwgfx_vis_update(struct vmwgfx_state *state,
+    uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+	struct vmw_private *vmw = state->vmw;
+	struct {
+		uint32_t header;
+		SVGAFifoCmdUpdate body;
+	} *cmd;
+
+	if (vmw == NULL || !vmw_cmd_supported(vmw))
+		return;
+
+	cmd = VMW_CMD_RESERVE(vmw, sizeof(*cmd));
+	if (cmd == NULL)
+		return;
+
+	cmd->header = SVGA_CMD_UPDATE;
+	cmd->body.x = x;
+	cmd->body.y = y;
+	cmd->body.width = width;
+	cmd->body.height = height;
+	vmw_cmd_commit(vmw, sizeof(*cmd));
 }
 
 /*
@@ -371,6 +409,8 @@ vmwgfx_vis_ioctl(struct vmwgfx_state *state, int cmd, intptr_t arg, int mode)
 		if (ddi_copyin((void *)arg, &disp, sizeof (disp), mode) != 0)
 			return (EFAULT);
 		vmwgfx_vis_display(state, &disp);
+		vmwgfx_vis_update(state, disp.col, disp.row,
+		    disp.width, disp.height);
 		return (0);
 	}
 
@@ -380,6 +420,9 @@ vmwgfx_vis_ioctl(struct vmwgfx_state *state, int cmd, intptr_t arg, int mode)
 		if (ddi_copyin((void *)arg, &cp, sizeof (cp), mode) != 0)
 			return (EFAULT);
 		vmwgfx_vis_copy(state, &cp);
+		vmwgfx_vis_update(state, cp.t_col, cp.t_row,
+		    (uint32_t)(cp.e_col - cp.s_col + 1),
+		    (uint32_t)(cp.e_row - cp.s_row + 1));
 		return (0);
 	}
 
@@ -395,6 +438,9 @@ vmwgfx_vis_ioctl(struct vmwgfx_state *state, int cmd, intptr_t arg, int mode)
 			if (ddi_copyout(&cur, (void *)arg,
 			    sizeof (cur), mode) != 0)
 				return (EFAULT);
+		} else {
+			vmwgfx_vis_update(state, cur.col, cur.row,
+			    cur.width, cur.height);
 		}
 		return (0);
 	}
@@ -405,6 +451,8 @@ vmwgfx_vis_ioctl(struct vmwgfx_state *state, int cmd, intptr_t arg, int mode)
 		if (ddi_copyin((void *)arg, &clr, sizeof (clr), mode) != 0)
 			return (EFAULT);
 		vmwgfx_vis_clear(state, &clr);
+		vmwgfx_vis_update(state, 0, 0,
+		    state->fb_width, state->fb_height);
 		return (0);
 	}
 
@@ -457,6 +505,13 @@ vmwgfx_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	if (ret != 0) {
 		cmn_err(CE_WARN, "vmwgfx: probe failed: %d", ret);
 		goto fail_probe;
+	}
+
+	/* Store vmw_private pointer for VIS→FIFO update commands */
+	{
+		struct drm_device *drm_dev = pci_get_drvdata(pdev);
+		if (drm_dev != NULL)
+			state->vmw = vmw_priv(drm_dev);
 	}
 
 	/*
@@ -566,6 +621,9 @@ vmwgfx_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 
 	/* Remove /dev/dri/card0 node */
 	ddi_remove_minor_node(dip, NULL);
+
+	/* Clear vmw pointer before teardown to stop VIS from issuing FIFO cmds */
+	state->vmw = NULL;
 
 	if (vmw_pci_driver.remove)
 		vmw_pci_driver.remove(pdev);
