@@ -1,17 +1,19 @@
 /* Public domain. */
 /*
- * illumos: OpenBSD <sys/vnode.h> stub for DRM.
- * drm_drv.c includes this but does not use any vnode types directly.
- * On illumos, real vnode access is not needed by the DRM core.
+ * illumos: <sys/vnode.h> shim for DRM.
+ *
+ * This shim sits in the DRM linux-compat include path and ensures the real
+ * illumos sys/vnode.h is also processed.  Without it, system headers that
+ * transitively include <sys/vnode.h> (e.g. sys/vfs_opreg.h → sys/vfs.h)
+ * would only find this shim and never see the full type definitions
+ * (vopstats_t, vnodeops_t, caller_context_t, vattr_t …).
+ *
+ * We use #include_next so GCC continues searching past this directory and
+ * picks up /usr/include/sys/vnode.h with the complete definitions.
  */
 #ifndef _SYS_VNODE_COMPAT_H
 #define _SYS_VNODE_COMPAT_H
 
-/*
- * Forward-declare vnode_t. The system headers (vm/page.h etc.)
- * pulled in transitively by sys/systm.h need this typedef.
- */
-struct vnode;
-typedef struct vnode vnode_t;
+#include_next <sys/vnode.h>
 
 #endif /* _SYS_VNODE_COMPAT_H */

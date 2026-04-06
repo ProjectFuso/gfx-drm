@@ -49,9 +49,6 @@
 #include <sys/debug.h>
 #include <sys/gfx_private.h>
 #include <sys/vnode.h>
-#include <sys/vfs_opreg.h>
-#include <sys/file.h>
-#include <sys/mman.h>
 
 #include <linux/dma-buf.h>
 #include <linux/mod_devicetable.h>
@@ -2399,68 +2396,20 @@ dma_fence_is_container(struct dma_fence *fence)
 
 /* ===== DMA-BUF Implementation ===== */
 
-static vnodeops_t *dma_buf_vnodeops = NULL;
-
 /*
- * NOTE: dma_buf_vop_map / dma_buf_vop_devmap are intentionally absent.
- * Direct mmap() on a dma-buf fd is not needed for the DRI3 handle-passing
- * flow (export handle→fd, pass fd, import fd→handle, mmap via DRM device).
- * Implement when needed via devmap_setup(dmabuf->illumos_devt, ...).
+ * Vnode ops and vnode allocation are in drm_illumos_dmabuf.c.
+ * Kernel file-table operations are in drm_illumos_kfile.c.
+ * This avoids the struct file name conflict between illumos sys/file.h
+ * (kernel file table) and linux/fs.h (Linux DRM compat struct file).
  */
-
-static int
-dma_buf_vop_getattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr)
-{
-	struct dma_buf *dmabuf = vp->v_data;
-	struct drm_gem_object *obj = dmabuf->priv;
-
-	(void)flags; (void)cr;
-
-	if (obj == NULL)
-		return (ENXIO);
-
-	bzero(vap, sizeof (*vap));
-	vap->va_type = VREG;
-	vap->va_mode = 0666;
-	vap->va_size = obj->size;
-	vap->va_nodeid = (ino64_t)(uintptr_t)dmabuf;
-	return (0);
-}
-
-static void
-dma_buf_vop_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
-{
-	struct dma_buf *dmabuf = vp->v_data;
-
-	(void)cr; (void)ct;
-
-	if (dmabuf->ops->release)
-		dmabuf->ops->release(dmabuf);
-
-	if (dmabuf->file)
-		kmem_free(dmabuf->file, sizeof (struct file));
-
-	kmem_free(dmabuf, sizeof (struct dma_buf));
-	vn_free(vp);
-}
-
-static const fs_operation_def_t dma_buf_vnodeops_template[] = {
-	{ VOPNAME_GETATTR,	{ .vop_getattr = dma_buf_vop_getattr } },
-	{ VOPNAME_INACTIVE,	{ .vop_inactive = dma_buf_vop_inactive } },
-	{ NULL,			{ NULL } }
-};
+extern int drm_illumos_dmabuf_alloc(struct dma_buf *dmabuf);
+extern void *drm_fd_to_dmabuf(int fd);   /* returns struct dma_buf *, NULL on error */
+extern int drm_vnode_to_fd(void *vp);    /* vnode_t * → fd number, or -errno */
 
 struct dma_buf *
 dma_buf_export(const struct dma_buf_export_info *info)
 {
 	struct dma_buf *dmabuf;
-	vnode_t *vp;
-
-	if (dma_buf_vnodeops == NULL) {
-		if (vn_make_ops("dma_buf", dma_buf_vnodeops_template,
-		    &dma_buf_vnodeops) != 0)
-			return ERR_PTR(-ENOMEM);
-	}
 
 	dmabuf = kmem_zalloc(sizeof (*dmabuf), KM_SLEEP);
 	dmabuf->ops = info->ops;
@@ -2469,15 +2418,15 @@ dma_buf_export(const struct dma_buf_export_info *info)
 	dmabuf->resv = info->resv;
 	INIT_LIST_HEAD(&dmabuf->attachments);
 
-	vp = vn_alloc(KM_SLEEP);
-	vn_setops(vp, dma_buf_vnodeops);
-	vp->v_data = dmabuf;
-	vp->v_type = VREG;
-	dmabuf->illumos_vnode = vp;
+	if (drm_illumos_dmabuf_alloc(dmabuf) != 0) {
+		kmem_free(dmabuf, sizeof (*dmabuf));
+		return ERR_PTR(-ENOMEM);
+	}
 
-	/* Create a dummy compat struct file for generic DRM code */
+	/* Allocate a compat struct file so Linux DRM code can use dmabuf->file */
 	dmabuf->file = kmem_zalloc(sizeof (struct file), KM_SLEEP);
 	dmabuf->file->private_data = dmabuf;
+	atomic_long_set(&dmabuf->file->f_count, 1);
 
 	return dmabuf;
 }
@@ -2485,22 +2434,10 @@ dma_buf_export(const struct dma_buf_export_info *info)
 struct dma_buf *
 dma_buf_get(int fd)
 {
-	file_t *fp;
-	vnode_t *vp;
-	struct dma_buf *dmabuf;
+	struct dma_buf *dmabuf = drm_fd_to_dmabuf(fd);
 
-	if ((fp = getf(fd)) == NULL)
+	if (dmabuf == NULL)
 		return ERR_PTR(-EBADF);
-
-	vp = fp->f_vnode;
-	if (vp == NULL || vn_getops(vp) != dma_buf_vnodeops) {
-		releasef(fd);
-		return ERR_PTR(-EINVAL);
-	}
-
-	dmabuf = vp->v_data;
-	get_dma_buf(dmabuf);
-	releasef(fd);
 	return dmabuf;
 }
 
@@ -2508,35 +2445,22 @@ void
 dma_buf_put(struct dma_buf *dmabuf)
 {
 	vnode_t *vp = dmabuf->illumos_vnode;
+
 	VN_RELE(vp);
 }
 
 int
 dma_buf_fd(struct dma_buf *dmabuf, int flags)
 {
-	vnode_t *vp = dmabuf->illumos_vnode;
-	file_t *fp;
-	int fd;
-
 	(void)flags;
-
-	if (falloc(NULL, FREAD | FWRITE, &fp, &fd) != 0)
-		return -EMFILE;
-
-	VN_HOLD(vp);
-	fp->f_vnode = vp;
-	fp->f_ptr = NULL;
-	fp->f_ops = &vn_file_ops;
-	fp->f_flag = FREAD | FWRITE;
-
-	setf(fd, fp);
-	return fd;
+	return drm_vnode_to_fd(dmabuf->illumos_vnode);
 }
 
 void
 get_dma_buf(struct dma_buf *dmabuf)
 {
 	vnode_t *vp = dmabuf->illumos_vnode;
+
 	VN_HOLD(vp);
 }
 
