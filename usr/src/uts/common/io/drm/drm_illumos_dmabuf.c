@@ -101,7 +101,7 @@ dma_buf_vop_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 static const fs_operation_def_t dma_buf_vnodeops_template[] = {
 	{ VOPNAME_GETATTR,	{ .vop_getattr = dma_buf_vop_getattr } },
 	{ VOPNAME_INACTIVE,	{ .vop_inactive = dma_buf_vop_inactive } },
-	{ NULL,			{ NULL } }
+	{ NULL,			NULL }
 };
 
 /*
