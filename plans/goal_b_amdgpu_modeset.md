@@ -202,3 +202,69 @@ subtree alone is larger than the entire current illumos DRM port. Before
 committing to this goal, consider: is a narrower target GPU (e.g., a
 specific Radeon RX card that uses DCN2.1) acceptable? That lets you
 ignore large swaths of DC code for other DCN generations.
+
+## OpenBSD reference findings
+
+(See `plans/openbsd_drm_analysis.md` for full details.)
+
+OpenBSD ships a **complete, working amdgpu driver** including the full
+DC display engine (1,047 files), amdkfd compute (64 files), and power
+management. Their approach validates our Phase 1 plan:
+
+**Scale of modifications:** only **96 conditional compilation sites**
+across the entire 2,452-file amd/ tree (91 `#ifdef __linux__` +
+5 `#ifdef __OpenBSD__`). Only ~30 files in amdgpu/ are touched. The
+modifications are surgical — a few lines per file.
+
+**Key observations that affect our plan:**
+
+- **B1 (firmware):** OpenBSD wraps `loadfirmware()` in ~40 lines
+  (`include/linux/firmware.h`). Our `vn_open`/`vn_rdwr` approach is
+  the same complexity. `request_firmware_nowait` returns `-EINVAL`
+  (async not needed).
+
+- **B3 (page_to_pfn):** OpenBSD gets this for free from UVM (their
+  `struct vm_page` IS `struct page`). We can't reuse native illumos
+  `page_t` due to name collision (`struct page` in both), field
+  incompatibility, and VM ownership model differences. Instead: add
+  `_pfn` field to our page shim + global PFN→page hash table for
+  reverse lookup. See Goal A / A10 for full rationale and
+  implementation plan. This is foundational and should be done before
+  amdgpu work begins.
+
+- **B4 (I2C):** OpenBSD implements a full i2c bridge in ~120 lines
+  (`drm_linux.c:1182-1295`). `i2c_master_xfer()` translates Linux
+  `i2c_msg` to OpenBSD `iic_exec()`. `i2c_bb_master_xfer()` handles
+  bit-bang adapters. illumos `i2c_transfer()` in `sys/i2c/i2c.h` is
+  the equivalent target.
+
+- **B5 (MSI-X):** OpenBSD stubs generic `request_irq` to no-op and
+  wires IRQs per-driver in attach, bypassing the shared IRQ bridge
+  entirely. Consider doing the same on illumos: let
+  `amdgpu_illumos.c` call `ddi_intr_*` directly for MSI-X, rather
+  than extending `drm_illumos_irq.c`.
+
+- **B8 (ACPI):** OpenBSD has real ACPI via their `acpica` integration.
+  Their `amdgpu_acpi.c` has one OpenBSD-specific workaround (skip S3
+  reset for VEGA10). They can read ACPI tables for connector topology.
+
+- **B10 (folio/HMM):** OpenBSD gates these with `#ifdef __linux__`.
+  Confirms our plan to skip them for basic modesetting.
+
+- **B11 (fbdev):** OpenBSD uses wscons (their console framework)
+  instead of fbdev. Confirms the per-OS console approach.
+
+**The OpenBSD amdgpu `#ifdef` sites serve as a near-exact checklist
+of files we'll need to patch during Phase 1 compilation.**
+
+Files with OpenBSD modifications (use as porting checklist):
+`amdgpu_device.c`, `amdgpu_drv.c`, `amdgpu_acpi.c`, `amdgpu_vm.c`,
+`amdgpu_gart.c`, `amdgpu_object.c`, `amdgpu_ttm.c`, `amdgpu_irq.c`,
+`amdgpu_ih.c`, `amdgpu_fence.c`, `amdgpu_psp.c`, `amdgpu_bios.c`,
+`amdgpu_doorbell_mgr.c`, `amdgpu_gem.c`, `amdgpu_i2c.c`,
+`amdgpu_ring_mux.c`, `amdgpu_sync.c`, `amdgpu_ucode.c`,
+`amdgpu_xgmi.c`, `amdgpu_ras.c`, `amdgpu_ras_eeprom.c`,
+`amdgpu_rap.c`, `amdgpu_amdkfd.c`, `amdgpu_mode.h`,
+`smu_v11_0_i2c.c`, `vcn_v1_0.c`,
+`display/amdgpu_dm/amdgpu_dm.c`,
+`display/dc/basics/amdgpu_vector.c`.

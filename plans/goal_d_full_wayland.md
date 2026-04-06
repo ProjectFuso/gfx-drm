@@ -188,3 +188,30 @@ have ~15-20 new subsystems that were added ad-hoc. Before declaring
   and tracking regressions.
 - Considering whether some of the `drm_linux.c` subsystems should move
   into dedicated source files (idr/xa/dma_fence are the largest).
+
+## OpenBSD reference findings
+
+(See `plans/openbsd_drm_analysis.md` for full details.)
+
+- **D3 (userptr / MMU notifier):** OpenBSD gates `mmu_interval_notifier`
+  with `#ifdef __linux__`. amdkfd compute is fully included but
+  userptr paths are excluded. Confirms: defer userptr, stub it out.
+
+- **D13 (explicit sync / eventfd):** OpenBSD does NOT implement
+  `eventfd`. Their sync_file is implemented (see C3) but eventfd-based
+  signaling is absent. Confirms: stub eventfd initially; sync_file
+  alone is sufficient for basic Vulkan.
+
+- **D2 (GPU reset):** OpenBSD has the full amdgpu reset path compiled.
+  PCI config save/restore would use their native PCI ops. Confirms
+  we need real `pci_save_state`/`pci_restore_state` via DDI config
+  space access, not stubs.
+
+- **D9 (suspend/resume):** OpenBSD has ACPI integration for
+  suspend/resume. Their `amdgpu_acpi.c` has one targeted workaround.
+  illumos suspend is less mature; defer as planned.
+
+- **Compat layer size:** OpenBSD's `drm_linux.c` is 3,982 lines
+  (vs our 3,303). By Goal D our file will be similar or larger.
+  The split-into-subsystems cleanup is important — OpenBSD keeps
+  everything in one file and it's maintainable but dense.

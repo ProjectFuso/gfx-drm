@@ -72,6 +72,14 @@ path for vmwgfx-self-share (DRI3 across a single device):
 
 Cross-device import (from e.g. amdgpu later) can be deferred.
 
+**OpenBSD reference:** `drm_linux.c:2578-2668` implements this in ~80
+lines. `dma_buf_export()` allocates a kernel file via `fnew(p)`, sets
+`f_type = DTYPE_DMABUF` with custom fileops, stores dmabuf in `f_data`.
+`dma_buf_get(fd)` does `fd_getfile()` + type-check. `dma_buf_fd()`
+does `fdalloc()` + `fdinsert()`. OpenBSD also stubs `dma_buf_attach`
+(returns NULL) — cross-device is deferred there too. Our approach is
+validated by theirs.
+
 ### A4. `vmwgfx_page_dirty.c` dirty tracking uses Linux MM primitives
 
 Uses `clean_record_shared_mapping_range`, `wp_shared_mapping_range`,
@@ -155,22 +163,120 @@ GEM/TTM helpers.  TTM's own pool supplies real PFNs via `hat_getpfnum`,
 so vmwgfx's MOB paths are fine in practice — but any caller that starts
 from a `struct page` obtained elsewhere and converts to a PFN is broken.
 
-**Fix:** make `alloc_pages` store the PFN at allocation time and have
-`page_to_pfn` read it from the `struct page` shim.
+**OpenBSD reference:** their `struct page` IS `struct vm_page` (UVM),
+so `page_to_pfn(pp)` is just `VM_PAGE_TO_PHYS(pp) / PAGE_SIZE` and
+`pfn_to_page(pfn)` is `PHYS_TO_VM_PAGE(ptoa(pfn))` — zero-cost macros.
+
+**Why we can't use native illumos `page_t` directly:**
+
+Using illumos `page_t` as Linux `struct page` (the OpenBSD approach)
+is not feasible on illumos for several reasons:
+
+1. **Name collision:** both illumos and Linux define `struct page`.
+   illumos `page_t` is `typedef struct page { ... }`. Including
+   `<vm/page.h>` in any translation unit that also sees the Linux
+   compat `struct page` is a hard conflict. (OpenBSD avoids this
+   because UVM uses `struct vm_page` — a different tag name.)
+
+2. **Field incompatibility:** Linux DRM accesses `page->lru`
+   (list_head for chaining, used by vmwgfx_validation.c), `page->kaddr`
+   (kernel VA, used by page_address()), `page->_refcount`. illumos
+   `page_t` has none of these fields. Its list linkage (`p_next`,
+   `p_prev`, `p_vpnext`, `p_vpprev`) is owned by the VM subsystem.
+
+3. **Ownership model mismatch:** illumos `page_t` instances are
+   managed by the VM system — they live in the global page hash,
+   are subject to page scanning and pageout, and require
+   `page_lock`/`page_unlock` protocols. Linux DRM's `struct page`
+   from `alloc_pages` represents "I own this physical memory" with
+   simple refcounting. On OpenBSD/UVM, `uvm_pglistalloc()` gives
+   detached pages with a compatible ownership model. On illumos,
+   getting free physical pages means `page_create_va()` which ties
+   pages to a vnode+offset pair.
+
+4. **Allocation model:** our `alloc_pages()` uses `kmem_alloc`, our
+   TTM pool uses `ddi_umem_alloc`. Switching to page-level VM
+   allocation would require choosing vnodes+offsets for DRM memory,
+   managing `p_selock`, and dealing with the page scanner — a
+   complete rework of the memory model.
+
+**Fix — shim with real PFN tracking:**
+
+Add a `_pfn` field to the existing `struct page` shim and maintain
+a global PFN→page hash table for the reverse lookup:
+
+```c
+struct page {
+    struct list_head lru;
+    void            *kaddr;
+    unsigned long    index;
+    unsigned int     _refcount;
+    pfn_t           _pfn;        /* physical frame number */
+};
+```
+
+Implementation:
+
+1. **Forward direction (`page_to_pfn`):** `alloc_pages()` calls
+   `hat_getpfnum(kas.a_hat, kaddr)` and stores it in `page->_pfn`.
+   `ttm_pool_alloc()` already calls `hat_getpfnum` — just also store
+   the result in the page shim.
+   ```c
+   #define page_to_pfn(pp)   ((pp)->_pfn)
+   #define page_to_phys(pp)  ((uint64_t)(pp)->_pfn << PAGE_SHIFT)
+   ```
+
+2. **Reverse direction (`pfn_to_page`):** maintain a global hash
+   table (`mod_hash_t` or a simple power-of-2 chained hash) mapping
+   `pfn_t → struct page *`. Insert at alloc time, remove at free
+   time.
+   ```c
+   #define pfn_to_page(pfn)  drm_illumos_pfn_to_page(pfn)
+   ```
+   Use a hash table — get it working before optimizing.
+
+3. **Update `dma_map_page`:** currently stubbed or using
+   `hat_getpfnum` ad-hoc. With `page->_pfn` available, it becomes
+   `(dma_addr_t)page->_pfn << PAGE_SHIFT` — one macro.
+
+4. **Update `ttm_pool_alloc`:** the `hat_getpfnum` call at
+   `ttm_pool.c:110` should also store into `tt->pages[i]->_pfn`
+   and insert into the hash.
+
+This is foundational — it unblocks B3, D6, and `dma_map_page`
+correctness across all drivers.
 
 ## Suggested kernel work order for Goal A
 
-1. A1 — enable backdoor (trivial, 1 commit).
-2. A2 — render node (small; unblocks DRI3 clients).
-3. A5 — ioctl permission wrapper (small).
-4. A9 — MSI-X (small, quality-of-life).
-5. A3 — PRIME/dma-buf for single-device DRI3 (medium, blocks real wayland).
+(Updated based on OpenBSD DRM analysis — see `plans/openbsd_drm_analysis.md`)
+
+1. A10 — `page_to_pfn` / `pfn_to_page` (**moved up — foundational**).
+   OpenBSD gets this for free from UVM (`VM_PAGE_TO_PHYS`). We must
+   store PFN at `alloc_pages` time and build a reverse lookup. This
+   unblocks amdgpu (B3/D6) too, so solving it now pays off across
+   all goals.
+2. A1 — enable backdoor (trivial, 1 commit).
+3. A2 — render node (small; unblocks DRI3 clients). OpenBSD does this
+   as a minor-number range check (0-63 = primary, 128-191 = render)
+   in their `drmopen()` — no separate device node needed. See R2 for
+   the minor encoding fix that enables this.
+4. A5 — ioctl permission wrapper (small).
+5. A3 — PRIME/dma-buf for single-device DRI3 (medium, blocks real
+   wayland). OpenBSD validates this approach: ~80 lines of fd-table
+   ops using `fnew()` + `DTYPE_DMABUF`. Our illumos equivalent uses
+   `falloc()`/`setf()`/`getf()` + vnode backing. Note: OpenBSD also
+   does NOT implement `dma_buf_attach` (returns NULL) — cross-device
+   is deferred there too.
 6. A4 — dirty tracking (medium; can initially be gated off with SYNCCPU
    mandated).
-7. A7 — `schedule_timeout` wake path (medium; only matters under load).
-8. A6 — demand-paging TTM fault (defer until userland needs it).
-9. A8 — TTM swap (defer).
-10. A10 — `page_to_pfn` (defer until something trips it).
+7. A9 — MSI-X (small, quality-of-life). Consider per-driver IRQ wiring
+   instead of a shared bridge — OpenBSD stubs `request_irq` to no-op
+   and wires IRQs per-driver in attach. See R4 notes.
+8. A7 — `schedule_timeout` wake path (medium; only matters under load).
+9. A6 — demand-paging TTM fault (defer until userland needs it).
+   OpenBSD implements this via UVM fault handler with `pmap_enter()`;
+   our equivalent would be a `devmap_access()` callback.
+10. A8 — TTM swap (defer).
 
 ## What is NOT a blocker for 3D
 

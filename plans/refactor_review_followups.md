@@ -78,6 +78,12 @@ Refactor `vmwgfx_cb_ioctl`'s own `VMWGFX_MINOR_SLOT` macro
 This also unblocks R5 (render-node support, see goal_a_vmwgfx_3d.md
 item A2) by giving render-node opens a distinct minor encoding.
 
+**OpenBSD reference:** `drm_drv.c:1761-1770` decodes minor as
+`realminor < 64` → PRIMARY, `>= 128 && < 192` → RENDER. Uses a
+SPLAY tree keyed on minor for file tracking (not a fixed slot array).
+Consider adopting a similar tree-based approach on illumos, which
+would also solve R1 (locking) more naturally.
+
 ---
 
 ## R3. Return-sign convention is inconsistent across the bridge
@@ -137,6 +143,15 @@ The existing single-vector API can be kept as a thin wrapper for
 backwards compatibility with the current vmwgfx caller.
 
 This is a prerequisite for Goal B (amdgpu) / goal doc item B5.
+
+**OpenBSD reference:** OpenBSD stubs `request_irq` to `return 0` and
+wires IRQs **per-driver** in each driver's attach function, bypassing
+a shared bridge entirely. Consider whether illumos should follow the
+same pattern: let `vmwgfx_illumos.c` and `amdgpu_illumos.c` each call
+`ddi_intr_*` directly. This avoids the complexity of a generic MSI-X
+bridge and lets each driver negotiate its own interrupt type/count.
+The existing `drm_illumos_irq.c` can remain for vmwgfx (fixed-only),
+while amdgpu gets its own MSI-X wiring in `amdgpu_illumos.c`.
 
 ---
 

@@ -122,3 +122,38 @@ No new large kernel subsystems beyond these — most of the heavy lifting
 for Goal C is in Goal B. Once amdgpu is up and PRIME works, a minimal
 wlroots/Weston should come up because AMDGPU's upstream atomic/DC code
 already satisfies every other compositor expectation.
+
+## OpenBSD reference findings
+
+(See `plans/openbsd_drm_analysis.md` for full details.)
+
+- **C1 (dma-buf import):** OpenBSD stubs `dma_buf_attach()` to return
+  NULL and `dma_buf_detach()` to panic. Cross-device import is **not
+  implemented** on OpenBSD either. This confirms that single-device
+  self-import (same amdgpu exporting and importing) is sufficient for
+  a first Wayland compositor. The compositor imports buffers from
+  clients on the same GPU — the common case.
+
+- **C2 (drm_event read):** OpenBSD implements `drmread()` directly in
+  `drm_drv.c:1851` using `msleep_nsec()` + event dequeue + `uiomove()`.
+  Clean, ~80 lines. Our `cb_read` approach should follow the same
+  pattern: wait on `file_priv->event_wait`, dequeue from `event_list`,
+  `uiomove()` to the illumos `uio_t`.
+
+- **C3 (sync_file):** OpenBSD implements `sync_file_create()` and
+  `sync_file_get_fence()` in `drm_linux.c:3251-3268` using the same
+  fd-table pattern as dma-buf (~40 lines). `fnew(p)`, set
+  `f_type = DTYPE_SYNC`, wrap a `dma_fence *`. All other fops
+  (read, write, ioctl) return error stubs. **This is sufficient for
+  Mesa/Vulkan explicit sync.** Our illumos equivalent uses
+  `falloc()`/`setf()` + vnode wrapping the fence.
+
+- **C4 (hrtimer):** Not visible in OpenBSD's compat layer. They may
+  rely on `callout_t` / `timeout` which has adequate resolution.
+  Needs investigation on illumos — cyclic or high-res callout may
+  be needed.
+
+- **C7 (implicit sync / dma_resv):** OpenBSD's `dma_resv` code
+  compiles unchanged from Linux. Their `dma_fence` implementation
+  is functional. This suggests our dma_fence layer (already mostly
+  working) should carry dma_resv through without major issues.
