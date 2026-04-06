@@ -27,7 +27,7 @@
  * This file provides fd ↔ dma-buf vnode translation using the illumos
  * kernel file table (falloc/setf/getf).
  *
- * NOTE: No Linux DRM compat headers (linux/*.h) are included here.
+ * NOTE: No Linux DRM compat headers (linux/XXX.h) are included here.
  * This avoids the struct file name conflict between the illumos kernel
  * "struct file" (file table entry, defined in sys/file.h) and the Linux
  * DRM compat "struct file" (from linux/fs.h).
