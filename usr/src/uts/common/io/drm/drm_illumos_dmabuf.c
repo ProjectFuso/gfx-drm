@@ -54,12 +54,13 @@ static vnodeops_t *dma_buf_vnodeops;
  * (e.g. fstat(2)) get meaningful information.
  */
 static int
-dma_buf_vop_getattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr)
+dma_buf_vop_getattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
+    caller_context_t *ct)
 {
 	struct dma_buf *dmabuf = vp->v_data;
 	struct drm_gem_object *obj = dmabuf->priv;
 
-	(void)flags; (void)cr;
+	(void)flags; (void)cr; (void)ct;
 
 	if (obj == NULL)
 		return (ENXIO);
