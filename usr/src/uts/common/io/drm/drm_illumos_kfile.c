@@ -96,9 +96,14 @@ drm_vnode_to_fd(void *vp_opaque, int flags)
 	if (falloc(vp, FREAD | FWRITE, &fp, &fd) != 0)
 		return (-EMFILE);
 
+	/*
+	 * falloc() returns with fp->f_tlock held (see fio.c:falloc comment).
+	 * Release it before calling setf(), following the copen() convention.
+	 */
 	if (flags & FCLOEXEC)
 		f_setfd_or(fd, (short)FCLOEXEC);
 
+	mutex_exit(&fp->f_tlock);
 	setf(fd, fp);
 	return (fd);
 }
