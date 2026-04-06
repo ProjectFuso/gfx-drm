@@ -224,7 +224,14 @@ vmwgfx_vis_update(struct vmwgfx_state *state,
 	cmd->body.y = y;
 	cmd->body.width = width;
 	cmd->body.height = height;
-	vmw_cmd_commit(vmw, sizeof(*cmd));
+	/*
+	 * Use vmw_cmd_commit_flush rather than vmw_cmd_commit: when the
+	 * command buffer manager (cman) is active, vmw_cmd_commit only
+	 * buffers the command without submitting it to hardware.
+	 * vmw_cmd_commit_flush forces the buffer to be sent to the device
+	 * immediately, so the display update happens synchronously.
+	 */
+	vmw_cmd_commit_flush(vmw, sizeof(*cmd));
 }
 
 /*
