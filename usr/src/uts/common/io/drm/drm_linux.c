@@ -189,7 +189,8 @@ long
 schedule_timeout(long timeout)
 {
 	struct task_struct *t = current;
-	clock_t deadline, ret;
+	clock_t now, deadline, ret;
+	int woken;
 
 	if (timeout == MAX_SCHEDULE_TIMEOUT) {
 		/*
@@ -197,29 +198,31 @@ schedule_timeout(long timeout)
 		 * Return MAX_SCHEDULE_TIMEOUT unconditionally as the Linux
 		 * contract is "remaining time or MAX" and we are reschedulable.
 		 */
+		now = ddi_get_lbolt();
 		mutex_enter(&t->sched_mutex);
 		t->sched_should_wake = false;
 		(void) cv_timedwait_sig(&t->sched_cv, &t->sched_mutex,
-		    lbolt + drv_usectohz(1000000));
+		    now + drv_usectohz(1000000));
 		mutex_exit(&t->sched_mutex);
 		return (long)MAX_SCHEDULE_TIMEOUT;
 	}
 	if (timeout <= 0)
 		return 0;
 
-	deadline = lbolt + timeout;
+	now = ddi_get_lbolt();
+	deadline = now + timeout;
 	mutex_enter(&t->sched_mutex);
 	t->sched_should_wake = false;
 	ret = cv_timedwait_sig(&t->sched_cv, &t->sched_mutex, deadline);
-	bool woken = t->sched_should_wake;
+	woken = t->sched_should_wake;
 	mutex_exit(&t->sched_mutex);
 
 	if (woken) {
 		/* Woken early: return remaining ticks (>=1) */
-		long remaining = (long)(deadline - lbolt);
+		long remaining = (long)(deadline - ddi_get_lbolt());
 		return remaining > 0 ? remaining : 1;
 	}
-	return (ret > 0) ? (long)(deadline - lbolt) : 0;
+	return (ret > 0) ? (long)(deadline - ddi_get_lbolt()) : 0;
 }
 
 long
@@ -231,7 +234,7 @@ schedule_timeout_uninterruptible(long timeout)
 	if (timeout <= 0)
 		return 0;
 
-	deadline = lbolt + timeout;
+	deadline = ddi_get_lbolt() + timeout;
 	mutex_enter(&t->sched_mutex);
 	t->sched_should_wake = false;
 	(void) cv_timedwait(&t->sched_cv, &t->sched_mutex, deadline);
