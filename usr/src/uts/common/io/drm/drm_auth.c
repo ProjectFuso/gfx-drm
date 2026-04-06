@@ -249,6 +249,8 @@ drm_master_check_perm(struct drm_device *dev, struct drm_file *file_priv)
 	return 0;
 }
 
+static void drm_drop_master(struct drm_device *dev, struct drm_file *fpriv);
+
 int drm_setmaster_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file_priv)
 {
@@ -262,6 +264,19 @@ int drm_setmaster_ioctl(struct drm_device *dev, void *data,
 
 	if (drm_is_current_master_locked(file_priv))
 		goto out_unlock;
+
+#ifndef __linux__
+	/*
+	 * illumos has no logind to arbitrate DRM master.  A root caller
+	 * (already verified by drm_master_check_perm above) may forcibly
+	 * take master from whatever is currently holding it, just as logind
+	 * does on Linux via DROP_MASTER before granting to the new session.
+	 * Without this, modeset(1) probing and failing leaves dev->master
+	 * set, causing modeset(0)'s drmSetMaster to return EBUSY.
+	 */
+	if (dev->master && !drm_is_current_master_locked(file_priv))
+		drm_drop_master(dev, file_priv);
+#endif
 
 	if (dev->master) {
 		ret = -EBUSY;
