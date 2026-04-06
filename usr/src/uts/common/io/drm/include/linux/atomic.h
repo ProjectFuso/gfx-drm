@@ -234,6 +234,8 @@ typedef int64_t atomic_long_t;
 #define atomic_long_cmpxchg(p, o, n)	atomic_cmpxchg(p, o, n)
 #define atomic_long_add(i, v)		atomic64_add(i, v)
 #define atomic_long_sub(i, v)		atomic64_sub(i, v)
+#define atomic_long_inc(v)		atomic64_add(1, v)
+#define atomic_long_dec(v)		atomic64_add(-1, v)
 #else
 typedef int32_t atomic_long_t;
 #define atomic_long_set(p, v)		atomic_set(p, v)
@@ -241,6 +243,8 @@ typedef int32_t atomic_long_t;
 #define atomic_long_cmpxchg(p, o, n)	atomic_cmpxchg(p, o, n)
 #define atomic_long_add(i, v)		atomic_add(i, v)
 #define atomic_long_sub(i, v)		atomic_sub(i, v)
+#define atomic_long_inc(v)		atomic_add(1, v)
+#define atomic_long_dec(v)		atomic_add(-1, v)
 #endif
 
 static inline long
