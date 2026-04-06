@@ -1156,11 +1156,59 @@ vmwgfx_cb_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
 
 	/* GEM object must be backed by a TTM BO */
 	bo = container_of(gem, struct ttm_buffer_object, base);
+
+	/*
+	 * For TTM_PL_SYSTEM BOs, bo->ttm is NULL until first CPU access.
+	 * We need the pages allocated now for devmap_umem_setup, so force
+	 * TTM TT creation and population under the BO reservation lock.
+	 */
+	if (bo->ttm == NULL || bo->ttm->illumos_umem_cookie == NULL) {
+		struct ttm_operation_ctx ctx = {
+			.interruptible	= false,
+			.no_wait_gpu	= false,
+		};
+
+		ret = ttm_bo_reserve(bo, false, false, NULL);
+		if (ret != 0) {
+			cmn_err(CE_WARN,
+			    "vmwgfx_cb_devmap: ttm_bo_reserve failed: %d", ret);
+			drm_gem_object_put(gem);
+			return (EINVAL);
+		}
+
+		if (bo->ttm == NULL) {
+			ret = ttm_tt_create(bo, false);
+			if (ret != 0) {
+				ttm_bo_unreserve(bo);
+				cmn_err(CE_WARN,
+				    "vmwgfx_cb_devmap: ttm_tt_create failed: %d",
+				    ret);
+				drm_gem_object_put(gem);
+				return (EINVAL);
+			}
+		}
+
+		if (!ttm_tt_is_populated(bo->ttm)) {
+			ret = ttm_tt_populate(bo->bdev, bo->ttm, &ctx);
+			if (ret != 0) {
+				ttm_bo_unreserve(bo);
+				cmn_err(CE_WARN,
+				    "vmwgfx_cb_devmap: ttm_tt_populate failed: %d",
+				    ret);
+				drm_gem_object_put(gem);
+				return (EINVAL);
+			}
+		}
+
+		ttm_bo_unreserve(bo);
+	}
+
 	ttm = bo->ttm;
 
 	if (ttm == NULL || ttm->illumos_umem_cookie == NULL) {
 		cmn_err(CE_WARN,
-		    "vmwgfx_cb_devmap: GEM obj %p has no TTM umem cookie", gem);
+		    "vmwgfx_cb_devmap: GEM obj %p has no TTM umem cookie after "
+		    "populate", gem);
 		drm_gem_object_put(gem);
 		return (EINVAL);
 	}
@@ -1209,7 +1257,7 @@ static struct cb_ops vmwgfx_cb_ops = {
 	.cb_ioctl	= vmwgfx_cb_ioctl,
 	.cb_devmap	= vmwgfx_cb_devmap,
 	.cb_mmap	= nodev,
-	.cb_segmap	= nodev,
+	.cb_segmap	= ddi_devmap_segmap,	/* enables mmap via cb_devmap */
 	.cb_chpoll	= nochpoll,
 	.cb_prop_op	= ddi_prop_op,
 	.cb_str		= NULL,
