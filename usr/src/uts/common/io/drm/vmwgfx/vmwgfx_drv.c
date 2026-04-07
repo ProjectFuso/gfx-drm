@@ -1722,6 +1722,27 @@ static int vmw_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		drm_info(&vmw->drm,
 		    "illumos initial display: %ux%u depth=%u ret=%d\n",
 		    vmw->initial_width, vmw->initial_height, depth, wret);
+
+		/*
+		 * Configure the display topology so that SVGA_CMD_UPDATE
+		 * has a valid display destination.  Without this,
+		 * vmw_ldu_commit_list writes SVGA_REG_NUM_GUEST_DISPLAYS=1
+		 * but no display position/size entries, so the host discards
+		 * UPDATE commands.  (vmw_ldu_commit_list is only called from
+		 * a KMS atomic commit, which never happens at boot on illumos
+		 * since there is no fbdev layer to drive the initial modeset.)
+		 */
+		if (vmw->capabilities & SVGA_CAP_DISPLAY_TOPOLOGY) {
+			vmw_write(vmw, SVGA_REG_NUM_GUEST_DISPLAYS, 1);
+			vmw_write(vmw, SVGA_REG_DISPLAY_ID, 0);
+			vmw_write(vmw, SVGA_REG_DISPLAY_IS_PRIMARY, 1);
+			vmw_write(vmw, SVGA_REG_DISPLAY_POSITION_X, 0);
+			vmw_write(vmw, SVGA_REG_DISPLAY_POSITION_Y, 0);
+			vmw_write(vmw, SVGA_REG_DISPLAY_WIDTH,
+			    vmw->initial_width);
+			vmw_write(vmw, SVGA_REG_DISPLAY_HEIGHT,
+			    vmw->initial_height);
+		}
 	}
 #endif
 
