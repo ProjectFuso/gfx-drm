@@ -1945,12 +1945,23 @@ int vmw_kms_init(struct vmw_private *dev_priv)
 	drm_mode_create_suggested_offset_properties(dev);
 	vmw_kms_create_hotplug_mode_update_property(dev_priv);
 
+#ifdef __illumos__
+	/*
+	 * illumos: force Legacy Display Unit so the VIS graphical console
+	 * works.  The VIS console writes pixel data directly to VRAM and
+	 * uses SVGA_CMD_UPDATE to refresh the display; this only works when
+	 * the device scans out from VRAM (LDU mode).  STDU and SOU render
+	 * from MOB-backed screen targets and completely ignore VRAM writes.
+	 */
+	ret = vmw_kms_ldu_init_display(dev_priv);
+#else
 	ret = vmw_kms_stdu_init_display(dev_priv);
 	if (ret) {
 		ret = vmw_kms_sou_init_display(dev_priv);
 		if (ret) /* Fallback */
 			ret = vmw_kms_ldu_init_display(dev_priv);
 	}
+#endif
 	BUILD_BUG_ON(ARRAY_SIZE(display_unit_names) != (vmw_du_max + 1));
 	drm_info(&dev_priv->drm, "%s display unit initialized\n",
 		 display_unit_names[dev_priv->active_display_unit]);
