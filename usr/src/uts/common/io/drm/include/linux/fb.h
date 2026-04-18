@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 #include <sys/visual_io.h>
+#include <linux/bug.h>
+#include <linux/gfp.h>
 #include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/notifier.h>
@@ -78,6 +80,7 @@ struct fb_deferred_io_pageref {
 
 struct fb_deferred_io {
 	unsigned long delay;
+	struct page *(*get_page)(struct fb_info *info, unsigned long offset);
 	void (*deferred_io)(struct fb_info *info, struct list_head *pagereflist);
 };
 
@@ -93,6 +96,11 @@ struct fb_ops {
 	int (*fb_debug_enter)(struct fb_info *);
 	int (*fb_debug_leave)(struct fb_info *);
 	int (*fb_ioctl)(struct fb_info *, unsigned int, unsigned long);
+	ssize_t (*fb_read)(struct fb_info *, char __user *, size_t, loff_t *);
+	ssize_t (*fb_write)(struct fb_info *, const char __user *, size_t, loff_t *);
+	void (*fb_fillrect)(struct fb_info *, const struct fb_fillrect *);
+	void (*fb_copyarea)(struct fb_info *, const struct fb_copyarea *);
+	void (*fb_imageblit)(struct fb_info *, const struct fb_image *);
 	int (*fb_mmap)(struct fb_info *, struct vm_area_struct *);
 	void (*fb_destroy)(struct fb_info *);
 };
@@ -162,12 +170,23 @@ struct fb_info {
 #define FB_ROTATE_UD		2
 #define FB_ROTATE_CCW		3
 
-#define FB_DEFAULT_DEFERRED_OPS(a)
-#define __FB_DEFAULT_DEFERRED_OPS_RDWR(a)
-#define __FB_DEFAULT_DEFERRED_OPS_DRAW(a)
+#define FB_DEFAULT_DEFERRED_OPS(a) \
+	.fb_read = NULL, \
+	.fb_write = NULL, \
+	.fb_fillrect = NULL, \
+	.fb_copyarea = NULL, \
+	.fb_imageblit = NULL
+#define __FB_DEFAULT_DEFERRED_OPS_RDWR(a) \
+	.fb_read = NULL, \
+	.fb_write = NULL
+#define __FB_DEFAULT_DEFERRED_OPS_DRAW(a) \
+	.fb_fillrect = NULL, \
+	.fb_copyarea = NULL, \
+	.fb_imageblit = NULL
 #define FB_GEN_DEFAULT_DEFERRED_IOMEM_OPS(a, b, c)
 #define FB_GEN_DEFAULT_DEFERRED_DMAMEM_OPS(a, b, c)
 #define FB_GEN_DEFAULT_DEFERRED_SYSMEM_OPS(a, b, c)
+#define fb_WARN_ON_ONCE(info, condition) WARN_ON_ONCE(condition)
 
 static inline struct fb_info *
 framebuffer_alloc(size_t size, void *dev)
@@ -226,6 +245,12 @@ fb_deferred_io_init(struct fb_info *fbi)
 }
 
 static inline int
+fb_deferred_io_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
+{
+	return 0;
+}
+
+static inline int
 fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp)
 {
 	size_t alloc;
@@ -263,6 +288,13 @@ fb_dealloc_cmap(struct fb_cmap *cmap)
 	kfree(cmap->blue);
 	kfree(cmap->transp);
 	bzero(cmap, sizeof (*cmap));
+}
+
+static inline void
+get_page(struct page *page)
+{
+	if (page != NULL)
+		page->_refcount++;
 }
 
 #endif
