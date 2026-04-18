@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include <linux/kconfig.h>
 #ifdef CONFIG_DRM_FBDEV_EMULATION
 
 #include <linux/fb.h>
