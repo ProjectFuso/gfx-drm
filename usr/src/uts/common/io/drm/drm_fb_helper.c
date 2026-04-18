@@ -1690,8 +1690,6 @@ static int drm_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper)
 	return 0;
 }
 
-#ifdef __linux__
-
 static void drm_fb_helper_fill_fix(struct fb_info *info, uint32_t pitch,
 				   bool is_color_indexed)
 {
@@ -1709,7 +1707,95 @@ static void drm_fb_helper_fill_fix(struct fb_info *info, uint32_t pitch,
 	info->fix.line_length = pitch;
 }
 
-#endif /* __linux__ */
+#ifndef __linux__
+static void
+drm_fb_helper_fill_pixel_fmt_illumos(struct fb_var_screeninfo *var,
+				     const struct drm_format_info *format)
+{
+	u8 depth = format->depth;
+
+	if (format->is_color_indexed) {
+		var->red.offset = 0;
+		var->green.offset = 0;
+		var->blue.offset = 0;
+		var->red.length = depth;
+		var->green.length = depth;
+		var->blue.length = depth;
+		var->transp.offset = 0;
+		var->transp.length = 0;
+		return;
+	}
+
+	switch (depth) {
+	case 15:
+		var->red.offset = 10;
+		var->green.offset = 5;
+		var->blue.offset = 0;
+		var->red.length = 5;
+		var->green.length = 5;
+		var->blue.length = 5;
+		var->transp.offset = 15;
+		var->transp.length = 1;
+		break;
+	case 16:
+		var->red.offset = 11;
+		var->green.offset = 5;
+		var->blue.offset = 0;
+		var->red.length = 5;
+		var->green.length = 6;
+		var->blue.length = 5;
+		var->transp.offset = 0;
+		break;
+	case 24:
+		var->red.offset = 16;
+		var->green.offset = 8;
+		var->blue.offset = 0;
+		var->red.length = 8;
+		var->green.length = 8;
+		var->blue.length = 8;
+		var->transp.offset = 0;
+		var->transp.length = 0;
+		break;
+	case 32:
+		var->red.offset = 16;
+		var->green.offset = 8;
+		var->blue.offset = 0;
+		var->red.length = 8;
+		var->green.length = 8;
+		var->blue.length = 8;
+		var->transp.offset = 24;
+		var->transp.length = 8;
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+drm_fb_helper_fill_var_illumos(struct fb_var_screeninfo *var,
+			       struct fb_info *info,
+			       struct drm_framebuffer *fb)
+{
+	int i;
+
+	var->xres_virtual = fb->width;
+	var->yres_virtual = fb->height;
+	var->accel_flags = 0;
+	var->bits_per_pixel = drm_format_info_bpp(fb->format, 0);
+
+	var->height = info->var.height;
+	var->width = info->var.width;
+
+	var->left_margin = var->right_margin = 0;
+	var->upper_margin = var->lower_margin = 0;
+	var->hsync_len = var->vsync_len = 0;
+	var->sync = var->vmode = 0;
+	var->rotate = 0;
+	var->colorspace = 0;
+	for (i = 0; i < 4; i++)
+		var->reserved[i] = 0;
+}
+#endif
 
 static void drm_fb_helper_fill_var(struct fb_info *info,
 				   struct drm_fb_helper *fb_helper,
@@ -1731,15 +1817,17 @@ static void drm_fb_helper_fill_var(struct fb_info *info,
 		break;
 	}
 
-#ifdef __linux__
 	info->pseudo_palette = fb_helper->pseudo_palette;
 	info->var.xoffset = 0;
 	info->var.yoffset = 0;
+#ifdef __linux__
 	__fill_var(&info->var, info, fb);
-	info->var.activate = FB_ACTIVATE_NOW;
-
 	drm_fb_helper_fill_pixel_fmt(&info->var, format);
+#else
+	drm_fb_helper_fill_var_illumos(&info->var, info, fb);
+	drm_fb_helper_fill_pixel_fmt_illumos(&info->var, format);
 #endif
+	info->var.activate = FB_ACTIVATE_NOW;
 
 	info->var.xres = fb_width;
 	info->var.yres = fb_height;
@@ -1762,17 +1850,14 @@ void drm_fb_helper_fill_info(struct fb_info *info,
 			     struct drm_fb_helper *fb_helper,
 			     struct drm_fb_helper_surface_size *sizes)
 {
-#ifdef __linux__
 	struct drm_framebuffer *fb = fb_helper->fb;
 
 	drm_fb_helper_fill_fix(info, fb->pitches[0],
 			       fb->format->is_color_indexed);
-#endif
 	drm_fb_helper_fill_var(info, fb_helper,
 			       sizes->fb_width, sizes->fb_height);
 
 	info->par = fb_helper;
-#ifdef __linux__
 	/*
 	 * The DRM drivers fbdev emulation device name can be confusing if the
 	 * driver name also has a "drm" suffix on it. Leading to names such as
@@ -1781,7 +1866,6 @@ void drm_fb_helper_fill_info(struct fb_info *info,
 	 */
 	snprintf(info->fix.id, sizeof(info->fix.id), "%sdrmfb",
 		 fb_helper->dev->driver->name);
-#endif
 }
 EXPORT_SYMBOL(drm_fb_helper_fill_info);
 
