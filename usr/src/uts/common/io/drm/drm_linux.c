@@ -3324,21 +3324,6 @@ drm_linux_exit(void)
 }
 
 /*
- * drm_fbdev_client_setup — Phase 1 stub.
- * drm_fbdev_client.c is excluded from compilation because it doesn't
- * pull in generated/autoconf.h.  Provide a no-op so the linker is
- * satisfied; fbdev emulation is not needed to load/attach the driver.
- */
-#include <drm/drm_fbdev_client.h>
-int
-drm_fbdev_client_setup(struct drm_device *dev,
-    const struct drm_format_info *format)
-{
-	(void)dev; (void)format;
-	return 0;
-}
-
-/*
  * kfpu_begin / kfpu_end — kernel FPU save/restore.
  * These are declared extern in asm/fpu/api.h and used by drm_cache.c
  * for MOVNTDQA-based WC memcpy.  On this illumos kernel the symbols
