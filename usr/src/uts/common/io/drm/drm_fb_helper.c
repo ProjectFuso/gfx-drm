@@ -613,8 +613,6 @@ void drm_fb_helper_fini(struct drm_fb_helper *fb_helper)
 }
 EXPORT_SYMBOL(drm_fb_helper_fini);
 
-#ifdef __linux__
-
 static void drm_fb_helper_add_damage_clip(struct drm_fb_helper *helper, u32 x, u32 y,
 					  u32 width, u32 height)
 {
@@ -750,8 +748,6 @@ void drm_fb_helper_deferred_io(struct fb_info *info, struct list_head *pagerefli
 	}
 }
 EXPORT_SYMBOL(drm_fb_helper_deferred_io);
-
-#endif /* __linux__ */
 
 /**
  * drm_fb_helper_set_suspend - wrapper around fb_set_suspend
