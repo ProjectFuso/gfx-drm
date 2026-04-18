@@ -195,7 +195,6 @@ struct drm_fb_helper {
 	 */
 	int preferred_bpp;
 
-#ifdef CONFIG_FB_DEFERRED_IO
 	/**
 	 * @fbdefio:
 	 *
@@ -205,7 +204,6 @@ struct drm_fb_helper {
 	 * a shadow buffer.
 	 */
 	struct fb_deferred_io fbdefio;
-#endif
 };
 
 static inline struct drm_fb_helper *

@@ -1339,10 +1339,8 @@ static void vmw_master_drop(struct drm_device *dev,
 
 	/*
 	 * illumos VT-switch: destroy all screen objects / screen targets so
-	 * the legacy SVGA framebuffer (VRAM at offset 0) becomes the primary
-	 * display source again.  The VIS console writes directly to VRAM and
-	 * uses SVGA_CMD_UPDATE; if screen objects are still active they
-	 * overlay the legacy framebuffer and VIS output is invisible.
+	 * the generic fbdev helper can restore a kernel-owned scanout when
+	 * userspace drops DRM master.
 	 *
 	 * X will re-create all display state when it regains DRM master via
 	 * drmSetMaster() -> vmw_master_set() -> drm_sysfs_hotplug_event().
@@ -1702,49 +1700,7 @@ static int vmw_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	vmw_fifo_resource_inc(vmw);
 	vmw_svga_enable(vmw);
-#ifdef __linux__
 	drm_fbdev_ttm_setup(&vmw->drm,  0);
-#else
-	/*
-	 * illumos: no fbdev layer, so nothing triggers the initial KMS
-	 * modeset that writes SVGA_REG_WIDTH/HEIGHT/BITS_PER_PIXEL.
-	 * Write these registers directly so the VM display switches to
-	 * accelerated mode at the native resolution instead of staying
-	 * black.  Use the depth the host already reports for BPP=32 to
-	 * satisfy vmw_kms_write_svga's consistency check.
-	 */
-	{
-		unsigned int depth = vmw_read(vmw, SVGA_REG_DEPTH);
-		int wret = vmw_kms_write_svga(vmw,
-		    vmw->initial_width, vmw->initial_height,
-		    vmw->initial_width * 4,	/* stride: 4 bytes/pixel */
-		    32, depth ? depth : 24);
-		drm_info(&vmw->drm,
-		    "illumos initial display: %ux%u depth=%u ret=%d\n",
-		    vmw->initial_width, vmw->initial_height, depth, wret);
-
-		/*
-		 * Configure the display topology so that SVGA_CMD_UPDATE
-		 * has a valid display destination.  Without this,
-		 * vmw_ldu_commit_list writes SVGA_REG_NUM_GUEST_DISPLAYS=1
-		 * but no display position/size entries, so the host discards
-		 * UPDATE commands.  (vmw_ldu_commit_list is only called from
-		 * a KMS atomic commit, which never happens at boot on illumos
-		 * since there is no fbdev layer to drive the initial modeset.)
-		 */
-		if (vmw->capabilities & SVGA_CAP_DISPLAY_TOPOLOGY) {
-			vmw_write(vmw, SVGA_REG_NUM_GUEST_DISPLAYS, 1);
-			vmw_write(vmw, SVGA_REG_DISPLAY_ID, 0);
-			vmw_write(vmw, SVGA_REG_DISPLAY_IS_PRIMARY, 1);
-			vmw_write(vmw, SVGA_REG_DISPLAY_POSITION_X, 0);
-			vmw_write(vmw, SVGA_REG_DISPLAY_POSITION_Y, 0);
-			vmw_write(vmw, SVGA_REG_DISPLAY_WIDTH,
-			    vmw->initial_width);
-			vmw_write(vmw, SVGA_REG_DISPLAY_HEIGHT,
-			    vmw->initial_height);
-		}
-	}
-#endif
 
 	vmw_debugfs_gem_init(vmw);
 	vmw_debugfs_resource_managers_init(vmw);

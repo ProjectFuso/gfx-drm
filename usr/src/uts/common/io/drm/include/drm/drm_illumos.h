@@ -7,6 +7,7 @@
 #include <sys/poll.h>
 #include <sys/mutex.h>
 #include <sys/sunddi.h>
+#include <sys/visual_io.h>
 #include <sys/vnode.h>
 
 #include <linux/fs.h>
@@ -86,6 +87,7 @@ drm_illumos_decode_slot(minor_t minor)
 struct drm_illumos_open {
 	struct file filp;
 	struct drm_minor *minor;
+	struct vis_polledio vis_polledio;
 	bool in_use;
 };
 
@@ -117,7 +119,7 @@ int drm_illumos_open(struct drm_illumos_file_state *state,
     struct drm_device *drm, int instance, int kind, dev_t *devp);
 int drm_illumos_close(struct drm_illumos_file_state *state, dev_t dev);
 int drm_illumos_ioctl(struct drm_illumos_file_state *state, dev_t dev,
-    int cmd, intptr_t arg);
+    int cmd, intptr_t arg, int mode);
 int drm_illumos_chpoll(struct drm_illumos_file_state *state, dev_t dev,
     short events, int anyyet, short *reventsp, struct pollhead **phpp);
 int drm_illumos_gem_ttm_devmap(struct drm_device *drm, devmap_cookie_t dhp,
