@@ -40,15 +40,17 @@ static __inline__ void
 vmware_hypercall5(unsigned long cmd, unsigned long in1, unsigned long in2,
     unsigned long in3, unsigned long in4, uint32_t *out1)
 {
-	uint32_t ecx;
+	uint32_t ecx, edx;
+
+	ecx = (uint32_t)cmd;
+	edx = (uint32_t)in2 | VMWARE_HYPERVISOR_PORT;
 
 	__asm__ __volatile__(
 		"inl (%%dx)"
-		: "=c" (ecx)
+		: "+c" (ecx)
 		: "a" (VMWARE_HYPERVISOR_MAGIC),
 		  "b" (in1),
-		  "c" (cmd),
-		  "d" (in2),
+		  "d" (edx),
 		  "S" (in3),
 		  "D" (in4)
 		: "memory"
@@ -67,13 +69,14 @@ vmware_hypercall6(unsigned long cmd, unsigned long in1, unsigned long in2,
 {
 	uint32_t ecx, edx, esi, edi;
 
+	ecx = (uint32_t)cmd;
+	edx = (uint32_t)in2 | VMWARE_HYPERVISOR_PORT;
+
 	__asm__ __volatile__(
 		"inl (%%dx)"
-		: "=c" (ecx), "=d" (edx), "=S" (esi), "=D" (edi)
+		: "+c" (ecx), "+d" (edx), "=S" (esi), "=D" (edi)
 		: "a" (VMWARE_HYPERVISOR_MAGIC),
-		  "b" (in1),
-		  "c" (cmd),
-		  "d" (in2)
+		  "b" (in1)
 		: "memory"
 	);
 	*out1 = ecx;
@@ -94,13 +97,14 @@ vmware_hypercall7(unsigned long cmd, unsigned long in1, unsigned long in2,
 {
 	uint32_t ebx, ecx, edx;
 
+	ebx = (uint32_t)in1;
+	ecx = (uint32_t)cmd;
+	edx = (uint32_t)in2 | VMWARE_HYPERVISOR_PORT;
+
 	__asm__ __volatile__(
 		"inl (%%dx)"
-		: "=b" (ebx), "=c" (ecx), "=d" (edx)
+		: "+b" (ebx), "+c" (ecx), "+d" (edx)
 		: "a" (VMWARE_HYPERVISOR_MAGIC),
-		  "b" (in1),
-		  "c" (cmd),
-		  "d" (in2),
 		  "S" (in3),
 		  "D" (in4)
 		: "memory"
@@ -122,20 +126,23 @@ vmware_hypercall_hb_out(unsigned long cmd, unsigned long in1,
     unsigned long in4, uint32_t *out1)
 {
 	uint32_t ebx;
+	uint32_t edx;
+
+	ebx = (uint32_t)cmd;
+	edx = (uint32_t)in2 | VMWARE_HYPERVISOR_PORT_HB;
 
 	__asm__ __volatile__(
 		"push %%rbp\n\t"
-		"movq %7, %%rbp\n\t"
+		"movq %6, %%rbp\n\t"
 		"cld\n\t"
 		"rep outsb\n\t"		/* HB out: rep outsb from ESI */
 		"pop %%rbp"
-		: "=b" (ebx)
+		: "+b" (ebx)
 		: "a" (VMWARE_HYPERVISOR_MAGIC),
-		  "b" (cmd),
 		  "c" (in1),
-		  "d" (VMWARE_HYPERVISOR_PORT_HB),
+		  "d" (edx),
 		  "S" (addr),
-		  "D" (in2),
+		  "D" (in4),
 		  "r" (in3)
 		: "memory", "cc"
 	);
@@ -154,21 +161,24 @@ vmware_hypercall_hb_in(unsigned long cmd, unsigned long in1,
     unsigned long in4, uint32_t *out1)
 {
 	uint32_t ebx;
+	uint32_t edx;
+
+	ebx = (uint32_t)cmd;
+	edx = (uint32_t)in2 | VMWARE_HYPERVISOR_PORT_HB;
 
 	__asm__ __volatile__(
 		"push %%rbp\n\t"
-		"movq %7, %%rbp\n\t"
+		"movq %6, %%rbp\n\t"
 		"cld\n\t"
 		"rep insb\n\t"		/* HB in: rep insb to EDI */
 		"pop %%rbp"
-		: "=b" (ebx)
+		: "+b" (ebx)
 		: "a" (VMWARE_HYPERVISOR_MAGIC),
-		  "b" (cmd),
 		  "c" (in1),
-		  "d" (VMWARE_HYPERVISOR_PORT_HB),
-		  "S" (in2),
+		  "d" (edx),
+		  "S" (in3),
 		  "D" (addr),
-		  "r" (in3)
+		  "r" (in4)
 		: "memory", "cc"
 	);
 	*out1 = ebx;
