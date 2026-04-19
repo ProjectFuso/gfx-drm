@@ -36,6 +36,7 @@
 #include <drm/drm_gem.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_illumos.h>
+#include <drm/drm_print.h>
 #include <drm/drm_vma_manager.h>
 #include <drm/ttm/ttm_bo.h>
 #include <drm/ttm/ttm_tt.h>
@@ -46,6 +47,15 @@ static const struct file_operations drm_illumos_fops_stub = {
 
 static const struct vis_identifier drm_illumos_vis_ident = {
 	"ILLUMOSdrmfb"
+};
+
+struct drm_illumos_vis_layout {
+	uint8_t *fb;
+	size_t fb_size;
+	size_t line_length;
+	uint32_t width;
+	uint32_t height;
+	uint32_t bpp;
 };
 
 static uint32_t
@@ -88,6 +98,98 @@ drm_illumos_vis_fb_helper(struct drm_illumos_open *op)
 	return (dev->fb_helper);
 }
 
+static bool
+drm_illumos_vis_get_layout(struct drm_fb_helper *fb_helper, const char *op,
+    struct drm_illumos_vis_layout *layout)
+{
+	struct fb_info *info;
+	size_t fb_size;
+	uint32_t width, height, bpp;
+	size_t line_length;
+
+	if (fb_helper == NULL || fb_helper->info == NULL)
+		return (false);
+
+	info = fb_helper->info;
+	line_length = info->fix.line_length;
+	width = info->var.xres_virtual ? info->var.xres_virtual : info->var.xres;
+	height = info->var.yres_virtual ? info->var.yres_virtual : info->var.yres;
+	bpp = info->var.bits_per_pixel;
+	fb_size = info->screen_size ? info->screen_size : info->fix.smem_len;
+
+	if (fb_size == 0 && line_length != 0 && height != 0)
+		fb_size = line_length * height;
+
+	if (info->screen_buffer == NULL || line_length == 0 ||
+	    width == 0 || height == 0 || fb_size == 0) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: invalid fb layout buf=%p size=%zu stride=%zu %ux%u bpp=%u\n",
+		    op, info->screen_buffer, fb_size, line_length, width,
+		    height, bpp);
+		return (false);
+	}
+
+	if (bpp != 32) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: unsupported bpp=%u stride=%zu %ux%u\n", op,
+		    bpp, line_length, width, height);
+		return (false);
+	}
+
+	layout->fb = (uint8_t *)info->screen_buffer;
+	layout->fb_size = fb_size;
+	layout->line_length = line_length;
+	layout->width = width;
+	layout->height = height;
+	layout->bpp = bpp;
+
+	return (true);
+}
+
+static bool
+drm_illumos_vis_rect_valid(struct drm_fb_helper *fb_helper, const char *op,
+    struct drm_illumos_vis_layout *layout, int row, int col, int width, int height)
+{
+	size_t col_off;
+	size_t width_bytes;
+	size_t last_off;
+
+	if (row < 0 || col < 0 || width <= 0 || height <= 0) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: invalid rect row=%d col=%d w=%d h=%d\n",
+		    op, row, col, width, height);
+		return (false);
+	}
+
+	if ((uint32_t)row + (uint32_t)height > layout->height ||
+	    (uint32_t)col + (uint32_t)width > layout->width) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: rect row=%d col=%d w=%d h=%d exceeds %ux%u\n",
+		    op, row, col, width, height, layout->width,
+		    layout->height);
+		return (false);
+	}
+
+	col_off = (size_t)col * 4;
+	width_bytes = (size_t)width * 4;
+	if (col_off + width_bytes > layout->line_length) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: rect row=%d col=%d w=%d h=%d exceeds stride=%zu\n",
+		    op, row, col, width, height, layout->line_length);
+		return (false);
+	}
+
+	last_off = ((size_t)(row + height - 1) * layout->line_length) + col_off;
+	if (last_off > layout->fb_size || width_bytes > layout->fb_size - last_off) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: rect row=%d col=%d w=%d h=%d exceeds fb_size=%zu\n",
+		    op, row, col, width, height, layout->fb_size);
+		return (false);
+	}
+
+	return (true);
+}
+
 static void
 drm_illumos_vis_damage(struct drm_fb_helper *fb_helper, uint32_t x, uint32_t y,
     uint32_t width, uint32_t height)
@@ -102,58 +204,83 @@ static void
 drm_illumos_vis_display_rect(struct drm_fb_helper *fb_helper,
     struct vis_consdisplay *dp)
 {
-	struct fb_info *info = fb_helper->info;
-	uint8_t *fb;
+	struct drm_illumos_vis_layout layout;
 	uint32_t y;
-	size_t line_length;
+	size_t width_bytes;
 
-	if (info == NULL || info->screen_buffer == NULL || dp->data == NULL)
+	if (dp->data == NULL) {
+		drm_err_once(fb_helper->dev,
+		    "vis display: NULL source pointer\n");
+		return;
+	}
+
+	if (!drm_illumos_vis_get_layout(fb_helper, "display", &layout))
+		return;
+	if (!drm_illumos_vis_rect_valid(fb_helper, "display", &layout,
+	    dp->row, dp->col, dp->width, dp->height))
 		return;
 
-	fb = (uint8_t *)info->screen_buffer;
-	line_length = info->fix.line_length;
+	width_bytes = (size_t)dp->width * 4;
 
 	for (y = 0; y < (uint32_t)dp->height; y++) {
-		uint8_t *dst = fb + ((uint32_t)dp->row + y) * line_length +
+		uint8_t *dst = layout.fb +
+		    ((uint32_t)dp->row + y) * layout.line_length +
 		    (uint32_t)dp->col * 4;
 		uint8_t *src = dp->data + y * (uint32_t)dp->width * 4;
 
-		bcopy(src, dst, (size_t)dp->width * 4);
+		bcopy(src, dst, width_bytes);
 	}
 }
 
 static void
 drm_illumos_vis_copy_rect(struct drm_fb_helper *fb_helper, struct vis_conscopy *cp)
 {
-	struct fb_info *info = fb_helper->info;
+	struct drm_illumos_vis_layout layout;
 	uint8_t *fb;
-	uint32_t stride;
 	uint32_t height;
+	uint32_t width;
 	uint32_t width_bytes;
 	int32_t i;
 
-	if (info == NULL || info->screen_buffer == NULL)
+	if (!drm_illumos_vis_get_layout(fb_helper, "copy", &layout))
+		return;
+	if (cp->e_row < cp->s_row || cp->e_col < cp->s_col) {
+		drm_err_once(fb_helper->dev,
+		    "vis copy: invalid source (%d,%d)-(%d,%d)\n",
+		    cp->s_row, cp->s_col, cp->e_row, cp->e_col);
+		return;
+	}
+
+	width = (uint32_t)(cp->e_col - cp->s_col + 1);
+	height = (uint32_t)(cp->e_row - cp->s_row + 1);
+	if (!drm_illumos_vis_rect_valid(fb_helper, "copy-src", &layout,
+	    cp->s_row, cp->s_col, width, height))
+		return;
+	if (!drm_illumos_vis_rect_valid(fb_helper, "copy-dst", &layout,
+	    cp->t_row, cp->t_col, width, height))
 		return;
 
-	fb = (uint8_t *)info->screen_buffer;
-	stride = info->fix.line_length;
-	height = (uint32_t)(cp->e_row - cp->s_row + 1);
-	width_bytes = (uint32_t)(cp->e_col - cp->s_col + 1) * 4;
+	fb = layout.fb;
+	width_bytes = width * 4;
 
 	if (cp->t_row <= cp->s_row) {
 		for (i = 0; i < (int32_t)height; i++) {
-			uint8_t *src = fb + ((uint32_t)cp->s_row + i) * stride +
+			uint8_t *src = fb +
+			    ((uint32_t)cp->s_row + i) * layout.line_length +
 			    (uint32_t)cp->s_col * 4;
-			uint8_t *dst = fb + ((uint32_t)cp->t_row + i) * stride +
+			uint8_t *dst = fb +
+			    ((uint32_t)cp->t_row + i) * layout.line_length +
 			    (uint32_t)cp->t_col * 4;
 
 			ovbcopy(src, dst, width_bytes);
 		}
 	} else {
 		for (i = (int32_t)height - 1; i >= 0; i--) {
-			uint8_t *src = fb + ((uint32_t)cp->s_row + i) * stride +
+			uint8_t *src = fb +
+			    ((uint32_t)cp->s_row + i) * layout.line_length +
 			    (uint32_t)cp->s_col * 4;
-			uint8_t *dst = fb + ((uint32_t)cp->t_row + i) * stride +
+			uint8_t *dst = fb +
+			    ((uint32_t)cp->t_row + i) * layout.line_length +
 			    (uint32_t)cp->t_col * 4;
 
 			ovbcopy(src, dst, width_bytes);
@@ -165,20 +292,21 @@ static void
 drm_illumos_vis_cursor_rect(struct drm_fb_helper *fb_helper,
     struct vis_conscursor *cur)
 {
-	struct fb_info *info = fb_helper->info;
-	uint8_t *fb;
-	uint32_t stride;
+	struct drm_illumos_vis_layout layout;
 	uint32_t x, y;
 
-	if (info == NULL || info->screen_buffer == NULL ||
-	    cur->action == VIS_GET_CURSOR)
+	if (cur->action == VIS_GET_CURSOR)
 		return;
 
-	fb = (uint8_t *)info->screen_buffer;
-	stride = info->fix.line_length;
+	if (!drm_illumos_vis_get_layout(fb_helper, "cursor", &layout))
+		return;
+	if (!drm_illumos_vis_rect_valid(fb_helper, "cursor", &layout,
+	    cur->row, cur->col, cur->width, cur->height))
+		return;
 
 	for (y = 0; y < (uint32_t)cur->height; y++) {
-		uint32_t *row = (uint32_t *)(fb + ((uint32_t)cur->row + y) * stride +
+		uint32_t *row = (uint32_t *)(layout.fb +
+		    ((uint32_t)cur->row + y) * layout.line_length +
 		    (uint32_t)cur->col * 4);
 
 		for (x = 0; x < (uint32_t)cur->width; x++)
@@ -189,17 +317,17 @@ drm_illumos_vis_cursor_rect(struct drm_fb_helper *fb_helper,
 static void
 drm_illumos_vis_clear_rect(struct drm_fb_helper *fb_helper, struct vis_consclear *clp)
 {
-	struct fb_info *info = fb_helper->info;
+	struct drm_illumos_vis_layout layout;
 	uint32_t *pixels;
 	uint32_t npixels, i;
 	uint32_t color;
 
-	if (info == NULL || info->screen_buffer == NULL)
+	if (!drm_illumos_vis_get_layout(fb_helper, "clear", &layout))
 		return;
 
 	color = drm_illumos_vis_color_map(clp->bg_color.eight);
-	pixels = (uint32_t *)info->screen_buffer;
-	npixels = info->var.xres_virtual * info->var.yres_virtual;
+	pixels = (uint32_t *)layout.fb;
+	npixels = layout.fb_size / sizeof (uint32_t);
 
 	for (i = 0; i < npixels; i++)
 		pixels[i] = color;
@@ -287,6 +415,12 @@ drm_illumos_vis_ioctl(struct drm_illumos_open *op, int cmd, intptr_t arg, int mo
 		init.mode = VIS_PIXEL;
 		init.color_map = drm_illumos_vis_color_map;
 		init.polledio = &op->vis_polledio;
+		drm_info_once(fb_helper->dev,
+		    "vis DEVINIT: %ux%u stride=%u bpp=%u screen=%zu shadow=%p\n",
+		    info->var.xres, info->var.yres, info->fix.line_length,
+		    info->var.bits_per_pixel,
+		    info->screen_size ? info->screen_size : info->fix.smem_len,
+		    info->screen_buffer);
 
 		if (ddi_copyout(&init, (void *)arg, sizeof (init), mode) != 0)
 			return (EFAULT);
