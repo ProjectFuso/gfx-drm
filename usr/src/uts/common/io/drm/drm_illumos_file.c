@@ -190,6 +190,44 @@ drm_illumos_vis_rect_valid(struct drm_fb_helper *fb_helper, const char *op,
 	return (true);
 }
 
+static bool
+drm_illumos_vis_clip_rect(struct drm_fb_helper *fb_helper, const char *op,
+    struct drm_illumos_vis_layout *layout, int *row, int *col, int *width,
+    int *height)
+{
+	uint32_t max_width, max_height;
+
+	if (*row < 0 || *col < 0 || *width <= 0 || *height <= 0) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: invalid rect row=%d col=%d w=%d h=%d\n",
+		    op, *row, *col, *width, *height);
+		return (false);
+	}
+
+	if ((uint32_t)*row >= layout->height || (uint32_t)*col >= layout->width) {
+		drm_err_once(fb_helper->dev,
+		    "vis %s: offscreen rect row=%d col=%d w=%d h=%d outside %ux%u\n",
+		    op, *row, *col, *width, *height, layout->width,
+		    layout->height);
+		return (false);
+	}
+
+	max_width = layout->width - (uint32_t)*col;
+	max_height = layout->height - (uint32_t)*row;
+	if ((uint32_t)*width > max_width || (uint32_t)*height > max_height) {
+		drm_warn_once(fb_helper->dev,
+		    "vis %s: clipping rect row=%d col=%d w=%d h=%d to %ux%u\n",
+		    op, *row, *col, *width, *height, max_width, max_height);
+		if ((uint32_t)*width > max_width)
+			*width = (int)max_width;
+		if ((uint32_t)*height > max_height)
+			*height = (int)max_height;
+	}
+
+	return drm_illumos_vis_rect_valid(fb_helper, op, layout, *row, *col,
+	    *width, *height);
+}
+
 static void
 drm_illumos_vis_damage(struct drm_fb_helper *fb_helper, uint32_t x, uint32_t y,
     uint32_t width, uint32_t height)
@@ -201,38 +239,62 @@ drm_illumos_vis_damage(struct drm_fb_helper *fb_helper, uint32_t x, uint32_t y,
 }
 
 static void
+drm_illumos_vis_damage_clipped(struct drm_fb_helper *fb_helper, int row, int col,
+    int width, int height)
+{
+	struct drm_illumos_vis_layout layout;
+
+	if (!drm_illumos_vis_get_layout(fb_helper, "damage", &layout))
+		return;
+	if (!drm_illumos_vis_clip_rect(fb_helper, "damage", &layout, &row, &col,
+	    &width, &height))
+		return;
+
+	drm_illumos_vis_damage(fb_helper, (uint32_t)col, (uint32_t)row,
+	    (uint32_t)width, (uint32_t)height);
+}
+
+static bool
 drm_illumos_vis_display_rect(struct drm_fb_helper *fb_helper,
     struct vis_consdisplay *dp)
 {
 	struct drm_illumos_vis_layout layout;
+	int row, col, width, height;
 	uint32_t y;
 	size_t width_bytes;
 
 	if (dp->data == NULL) {
 		drm_err_once(fb_helper->dev,
 		    "vis display: NULL source pointer\n");
-		return;
+		return (false);
 	}
 
 	if (!drm_illumos_vis_get_layout(fb_helper, "display", &layout))
-		return;
-	if (!drm_illumos_vis_rect_valid(fb_helper, "display", &layout,
-	    dp->row, dp->col, dp->width, dp->height))
-		return;
+		return (false);
 
-	width_bytes = (size_t)dp->width * 4;
+	row = dp->row;
+	col = dp->col;
+	width = dp->width;
+	height = dp->height;
+	if (!drm_illumos_vis_clip_rect(fb_helper, "display", &layout, &row, &col,
+	    &width, &height))
+		return (false);
 
-	for (y = 0; y < (uint32_t)dp->height; y++) {
+	width_bytes = (size_t)width * 4;
+
+	for (y = 0; y < (uint32_t)height; y++) {
 		uint8_t *dst = layout.fb +
-		    ((uint32_t)dp->row + y) * layout.line_length +
-		    (uint32_t)dp->col * 4;
+		    ((uint32_t)row + y) * layout.line_length +
+		    (uint32_t)col * 4;
 		uint8_t *src = dp->data + y * (uint32_t)dp->width * 4;
 
 		bcopy(src, dst, width_bytes);
 	}
+
+	return (true);
 }
 
-static void
+static bool
 drm_illumos_vis_copy_rect(struct drm_fb_helper *fb_helper, struct vis_conscopy *cp)
 {
 	struct drm_illumos_vis_layout layout;
@@ -243,22 +305,22 @@ drm_illumos_vis_copy_rect(struct drm_fb_helper *fb_helper, struct vis_conscopy *
 	int32_t i;
 
 	if (!drm_illumos_vis_get_layout(fb_helper, "copy", &layout))
-		return;
+		return (false);
 	if (cp->e_row < cp->s_row || cp->e_col < cp->s_col) {
 		drm_err_once(fb_helper->dev,
 		    "vis copy: invalid source (%d,%d)-(%d,%d)\n",
 		    cp->s_row, cp->s_col, cp->e_row, cp->e_col);
-		return;
+		return (false);
 	}
 
 	width = (uint32_t)(cp->e_col - cp->s_col + 1);
 	height = (uint32_t)(cp->e_row - cp->s_row + 1);
 	if (!drm_illumos_vis_rect_valid(fb_helper, "copy-src", &layout,
 	    cp->s_row, cp->s_col, width, height))
-		return;
+		return (false);
 	if (!drm_illumos_vis_rect_valid(fb_helper, "copy-dst", &layout,
 	    cp->t_row, cp->t_col, width, height))
-		return;
+		return (false);
 
 	fb = layout.fb;
 	width_bytes = width * 4;
@@ -286,32 +348,42 @@ drm_illumos_vis_copy_rect(struct drm_fb_helper *fb_helper, struct vis_conscopy *
 			ovbcopy(src, dst, width_bytes);
 		}
 	}
+
+	return (true);
 }
 
-static void
+static bool
 drm_illumos_vis_cursor_rect(struct drm_fb_helper *fb_helper,
     struct vis_conscursor *cur)
 {
 	struct drm_illumos_vis_layout layout;
+	int row, col, width, height;
 	uint32_t x, y;
 
 	if (cur->action == VIS_GET_CURSOR)
-		return;
+		return (false);
 
 	if (!drm_illumos_vis_get_layout(fb_helper, "cursor", &layout))
-		return;
-	if (!drm_illumos_vis_rect_valid(fb_helper, "cursor", &layout,
-	    cur->row, cur->col, cur->width, cur->height))
-		return;
+		return (false);
 
-	for (y = 0; y < (uint32_t)cur->height; y++) {
-		uint32_t *row = (uint32_t *)(layout.fb +
-		    ((uint32_t)cur->row + y) * layout.line_length +
-		    (uint32_t)cur->col * 4);
+	row = cur->row;
+	col = cur->col;
+	width = cur->width;
+	height = cur->height;
+	if (!drm_illumos_vis_clip_rect(fb_helper, "cursor", &layout, &row, &col,
+	    &width, &height))
+		return (false);
 
-		for (x = 0; x < (uint32_t)cur->width; x++)
-			row[x] ^= 0x00FFFFFF;
+	for (y = 0; y < (uint32_t)height; y++) {
+		uint32_t *pixrow = (uint32_t *)(layout.fb +
+		    ((uint32_t)row + y) * layout.line_length +
+		    (uint32_t)col * 4);
+
+		for (x = 0; x < (uint32_t)width; x++)
+			pixrow[x] ^= 0x00FFFFFF;
 	}
+
+	return (true);
 }
 
 static void
@@ -343,8 +415,9 @@ drm_illumos_vis_polled_display(struct vis_polledio_arg *arg,
 	if (fb_helper == NULL)
 		return;
 
-	drm_illumos_vis_display_rect(fb_helper, dp);
-	drm_illumos_vis_damage(fb_helper, dp->col, dp->row, dp->width, dp->height);
+	if (drm_illumos_vis_display_rect(fb_helper, dp))
+		drm_illumos_vis_damage_clipped(fb_helper, dp->row, dp->col,
+		    dp->width, dp->height);
 }
 
 static void
@@ -356,10 +429,9 @@ drm_illumos_vis_polled_copy(struct vis_polledio_arg *arg, struct vis_conscopy *c
 	if (fb_helper == NULL)
 		return;
 
-	drm_illumos_vis_copy_rect(fb_helper, cp);
-	drm_illumos_vis_damage(fb_helper, cp->t_col, cp->t_row,
-	    (uint32_t)(cp->e_col - cp->s_col + 1),
-	    (uint32_t)(cp->e_row - cp->s_row + 1));
+	if (drm_illumos_vis_copy_rect(fb_helper, cp))
+		drm_illumos_vis_damage_clipped(fb_helper, cp->t_row, cp->t_col,
+		    cp->e_col - cp->s_col + 1, cp->e_row - cp->s_row + 1);
 }
 
 static void
@@ -372,9 +444,8 @@ drm_illumos_vis_polled_cursor(struct vis_polledio_arg *arg,
 	if (fb_helper == NULL)
 		return;
 
-	drm_illumos_vis_cursor_rect(fb_helper, cur);
-	if (cur->action != VIS_GET_CURSOR)
-		drm_illumos_vis_damage(fb_helper, cur->col, cur->row,
+	if (drm_illumos_vis_cursor_rect(fb_helper, cur))
+		drm_illumos_vis_damage_clipped(fb_helper, cur->row, cur->col,
 		    cur->width, cur->height);
 }
 
@@ -436,9 +507,9 @@ drm_illumos_vis_ioctl(struct drm_illumos_open *op, int cmd, intptr_t arg, int mo
 		if (ddi_copyin((void *)arg, &disp, sizeof (disp), mode) != 0)
 			return (EFAULT);
 
-		drm_illumos_vis_display_rect(fb_helper, &disp);
-		drm_illumos_vis_damage(fb_helper, disp.col, disp.row,
-		    disp.width, disp.height);
+		if (drm_illumos_vis_display_rect(fb_helper, &disp))
+			drm_illumos_vis_damage_clipped(fb_helper, disp.row,
+			    disp.col, disp.width, disp.height);
 		return (0);
 	}
 
@@ -448,10 +519,10 @@ drm_illumos_vis_ioctl(struct drm_illumos_open *op, int cmd, intptr_t arg, int mo
 		if (ddi_copyin((void *)arg, &cp, sizeof (cp), mode) != 0)
 			return (EFAULT);
 
-		drm_illumos_vis_copy_rect(fb_helper, &cp);
-		drm_illumos_vis_damage(fb_helper, cp.t_col, cp.t_row,
-		    (uint32_t)(cp.e_col - cp.s_col + 1),
-		    (uint32_t)(cp.e_row - cp.s_row + 1));
+		if (drm_illumos_vis_copy_rect(fb_helper, &cp))
+			drm_illumos_vis_damage_clipped(fb_helper, cp.t_row,
+			    cp.t_col, cp.e_col - cp.s_col + 1,
+			    cp.e_row - cp.s_row + 1);
 		return (0);
 	}
 
@@ -461,15 +532,15 @@ drm_illumos_vis_ioctl(struct drm_illumos_open *op, int cmd, intptr_t arg, int mo
 		if (ddi_copyin((void *)arg, &cur, sizeof (cur), mode) != 0)
 			return (EFAULT);
 
-		drm_illumos_vis_cursor_rect(fb_helper, &cur);
+		if (cur.action != VIS_GET_CURSOR &&
+		    drm_illumos_vis_cursor_rect(fb_helper, &cur))
+			drm_illumos_vis_damage_clipped(fb_helper, cur.row,
+			    cur.col, cur.width, cur.height);
 		if (cur.action == VIS_GET_CURSOR) {
 			cur.row = 0;
 			cur.col = 0;
 			if (ddi_copyout(&cur, (void *)arg, sizeof (cur), mode) != 0)
 				return (EFAULT);
-		} else {
-			drm_illumos_vis_damage(fb_helper, cur.col, cur.row,
-			    cur.width, cur.height);
 		}
 		return (0);
 	}
@@ -481,7 +552,7 @@ drm_illumos_vis_ioctl(struct drm_illumos_open *op, int cmd, intptr_t arg, int mo
 			return (EFAULT);
 
 		drm_illumos_vis_clear_rect(fb_helper, &clr);
-		drm_illumos_vis_damage(fb_helper, 0, 0, info->var.xres,
+		drm_illumos_vis_damage_clipped(fb_helper, 0, 0, info->var.xres,
 		    info->var.yres);
 		return (0);
 	}
