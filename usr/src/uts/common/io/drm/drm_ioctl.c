@@ -152,7 +152,7 @@ static int drm_set_busid(struct drm_device *dev, struct drm_file *file_priv)
 #ifdef __linux__
 	if (dev->dev && dev_is_pci(dev->dev)) {
 #else
-	if (1) {
+	if (dev->dev && dev->dev->pdev != NULL) {
 #endif
 		ret = drm_pci_set_busid(dev, master);
 		if (ret) {
@@ -895,4 +895,3 @@ bool drm_ioctl_flags(unsigned int nr, unsigned int *flags)
 	return true;
 }
 EXPORT_SYMBOL(drm_ioctl_flags);
-

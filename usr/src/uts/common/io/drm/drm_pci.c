@@ -38,6 +38,10 @@
 
 static int drm_get_pci_domain(struct drm_device *dev)
 {
+#ifndef __linux__
+	struct pci_dev *pdev;
+#endif
+
 #ifndef __alpha__
 	/* For historical reasons, drm_get_pci_domain() is busticated
 	 * on most archs and has to remain so for userspace interface
@@ -50,7 +54,11 @@ static int drm_get_pci_domain(struct drm_device *dev)
 #ifdef __linux__
 	return pci_domain_nr(to_pci_dev(dev->dev)->bus);
 #else
-	return pci_domain_nr(dev->pdev->bus);
+	if (dev == NULL || dev->dev == NULL || dev->dev->pdev == NULL)
+		return 0;
+
+	pdev = dev->dev->pdev;
+	return pci_domain_nr(pdev->bus);
 #endif
 }
 
@@ -59,7 +67,12 @@ int drm_pci_set_busid(struct drm_device *dev, struct drm_master *master)
 #ifdef __linux__
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 #else
-	struct pci_dev *pdev = dev->pdev;
+	struct pci_dev *pdev;
+
+	if (dev == NULL || dev->dev == NULL || dev->dev->pdev == NULL)
+		return -ENODEV;
+
+	pdev = dev->dev->pdev;
 #endif
 
 	master->unique = kasprintf(GFP_KERNEL, "pci:%04x:%02x:%02x.%d",
